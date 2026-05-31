@@ -1,0 +1,6 @@
+{
+  "name": "HelaVest",
+  "description": "Premium Investment & M-Pesa Wallet Simulation Suite with Referrals and Active Trade Manager",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

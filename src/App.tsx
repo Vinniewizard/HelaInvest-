@@ -360,6 +360,7 @@ export default function App() {
               <Referrals
                  user={currentUser}
                  referrals={referrals}
+                 investments={investments}
                  onRefresh={triggerRefresh}
               />
             ) : currentTab === "profile" ? (

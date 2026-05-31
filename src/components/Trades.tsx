@@ -2,6 +2,50 @@ import React, { useState, useEffect } from "react";
 import { ListTodo, TrendingUp, Sparkles, Clock, CheckCircle2, XCircle, ArrowUpRight, HelpCircle, FastForward } from "lucide-react";
 import { Investment, InvestmentStatus, WalletBalance } from "../types";
 
+function LiveCountdown({ maturesAt }: { maturesAt: string }) {
+  const [timeLeft, setTimeLeft] = useState<{d: number; h: number; m: number; s: number}>({ d: 0, h: 0, m: 0, s: 0 });
+
+  useEffect(() => {
+    const calcTime = () => {
+      const now = Date.now();
+      const target = new Date(maturesAt).getTime();
+      const diff = target - now;
+
+      if (diff <= 0) {
+        setTimeLeft({ d: 0, h: 0, m: 0, s: 0 });
+        return;
+      }
+
+      setTimeLeft({
+        d: Math.floor(diff / (1000 * 60 * 60 * 24)),
+        h: Math.floor((diff / (1000 * 60 * 60)) % 24),
+        m: Math.floor((diff / 1000 / 60) % 60),
+        s: Math.floor((diff / 1000) % 60)
+      });
+    };
+
+    calcTime();
+    const int = setInterval(calcTime, 1000);
+    return () => clearInterval(int);
+  }, [maturesAt]);
+
+  if (timeLeft.d === 0 && timeLeft.h === 0 && timeLeft.m === 0 && timeLeft.s === 0) {
+    return <span className="text-emerald-400 font-bold animate-pulse">Ready/Matured</span>;
+  }
+
+  return (
+    <span className="font-mono text-orange-400 space-x-0.5">
+      <span>{timeLeft.d}d</span>
+      <span className="text-slate-500">:</span>
+      <span>{String(timeLeft.h).padStart(2, '0')}h</span>
+      <span className="text-slate-500">:</span>
+      <span>{String(timeLeft.m).padStart(2, '0')}m</span>
+      <span className="text-slate-500">:</span>
+      <span>{String(timeLeft.s).padStart(2, '0')}s</span>
+    </span>
+  );
+}
+
 interface TradesProps {
   investments: Investment[];
   balance: WalletBalance | null;
@@ -210,8 +254,8 @@ export default function Trades({ investments, balance, onRefresh }: TradesProps)
                         <TrendingUp className="h-3.5 w-3.5" />
                         {percent}% Progress
                       </span>
-                      <span className="font-mono">
-                        {daysLeft > 0 ? `${daysLeft} Day${daysLeft > 1 ? "s" : ""} Left` : "Maturing..."}
+                      <span>
+                        <LiveCountdown maturesAt={inv.matures_at} />
                       </span>
                     </div>
                     {/* Progress Track */}

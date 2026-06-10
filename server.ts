@@ -2,6 +2,7 @@ import express from "express";
 import path from "path";
 import fs from "fs";
 import { createServer as createViteServer } from "vite";
+import crypto from "crypto";
 
 const app = express();
 const PORT = 3000;
@@ -915,7 +916,12 @@ async function triggerNowPaymentsDeposit(
 
   // Live NOWPayments API Call
   try {
-    const response = await fetch("https://api.nowpayments.io/v1/payment", {
+    const baseUrl = process.env.NOWPAYMENTS_BASE_URL || "https://api.nowpayments.io/v1";
+    const ipnCallbackUrl = process.env.IPN_CALLBACK_URL || (process.env.APP_URL ? `${process.env.APP_URL}/api/callbacks/nowpayments` : "https://ais-dev-yb5liyh6fvh47qawmql43k-597530057912.europe-west2.run.app/api/callbacks/nowpayments");
+    
+    console.log(`[NOWPayments Live Request] Sending call to ${baseUrl}/payment with IPN URL: ${ipnCallbackUrl}`);
+
+    const response = await fetch(`${baseUrl}/payment`, {
       method: "POST",
       headers: {
         "x-api-key": apiKey,
@@ -926,7 +932,7 @@ async function triggerNowPaymentsDeposit(
         price_currency: "usd",
         pay_amount: null,
         pay_currency: normalizedCrypto,
-        ipn_callback_url: "https://ais-dev-yb5liyh6fvh47qawmql43k-597530057912.europe-west2.run.app/api/callbacks/nowpayments",
+        ipn_callback_url: ipnCallbackUrl,
         order_id: txId,
         order_description: `HelaVest Crypto Deposit for ${username}`
       })
@@ -1046,6 +1052,35 @@ app.post("/api/transactions/deposit-crypto", async (req, res) => {
 // NOWPayments IPN Webhook Receiver
 app.post("/api/callbacks/nowpayments", (req, res) => {
   console.log("[NOWPayments IPN Webhook Received]:", JSON.stringify(req.body));
+  
+  const ipnSecret = process.env.NOWPAYMENTS_IPN_SECRET;
+  const receivedSign = req.headers["x-nowpayments-sig"] || req.headers["X-Nowpayments-Sig"];
+  
+  if (ipnSecret && receivedSign) {
+    try {
+      // NOWPayments expects HMAC-SHA512 of sorted keys in alphabetical order
+      const sortedKeys = Object.keys(req.body).sort();
+      const sortedBody = sortedKeys.reduce((obj: any, key: string) => {
+        obj[key] = req.body[key];
+        return obj;
+      }, {});
+      
+      const hmac = crypto.createHmac("sha512", ipnSecret);
+      const calculatedSign = hmac.update(JSON.stringify(sortedBody)).digest("hex");
+      
+      if (calculatedSign !== receivedSign) {
+        console.error(`[NOWPayments IPN Callback Warning] Invalid Signature verification! Calculated: ${calculatedSign}, Received: ${receivedSign}`);
+        return res.status(401).json({ error: "Invalid signature verification" });
+      }
+      console.log("[NOWPayments IPN Callback] Cryptographic signature verified successfully.");
+    } catch (err: any) {
+      console.error("[NOWPayments IPN Callback Exception parsing signature]:", err);
+      return res.status(400).json({ error: "Failed to verify signature" });
+    }
+  } else {
+    console.log("[NOWPayments IPN Callback] Generic mode or local dev. Skipping signature verification due to missing NOWPAYMENTS_IPN_SECRET or x-nowpayments-sig header.");
+  }
+
   const { payment_status, order_id } = req.body;
   
   if (!order_id) {
@@ -1203,7 +1238,12 @@ app.post("/api/simulate/fast-forward", (req, res) => {
 
 // Reset Sandbox Database to defaults
 app.post("/api/admin/reset", (req, res) => {
-  const db: DatabaseSchema = {
+  const db = getDatabase();
+  const user = getAuthenticatedUser(req, db);
+  if (!user || !user.isAdmin) {
+    return res.status(403).json({ error: "Forbidden: Admin access only." });
+  }
+  const resetDb: DatabaseSchema = {
     users: DEFAULT_USERS,
     plans: DEFAULT_PLANS,
     investments: DEFAULT_INVESTMENTS,
@@ -1211,7 +1251,7 @@ app.post("/api/admin/reset", (req, res) => {
     referrals: [],
     systemOffsetDays: 0
   };
-  saveDatabase(db);
+  saveDatabase(resetDb);
   res.json({ success: true, message: "Sandbox database restored to clean defaults." });
 });
 
@@ -1223,6 +1263,10 @@ app.post("/api/admin/reset", (req, res) => {
 // List All Transactions
 app.get("/api/admin/transactions", (req, res) => {
   const db = getDatabase();
+  const user = getAuthenticatedUser(req, db);
+  if (!user || !user.isAdmin) {
+    return res.status(403).json({ error: "Forbidden: Admin access only." });
+  }
   // We can enrich each transaction with Username
   const enriched = db.transactions.map((t) => {
     const matchedUser = db.users.find((u) => u.id === t.user_id);
@@ -1238,6 +1282,10 @@ app.get("/api/admin/transactions", (req, res) => {
 app.post("/api/admin/transactions/:id/approve", (req, res) => {
   const { id } = req.params;
   const db = getDatabase();
+  const user = getAuthenticatedUser(req, db);
+  if (!user || !user.isAdmin) {
+    return res.status(403).json({ error: "Forbidden: Admin access only." });
+  }
 
   const tx = db.transactions.find((t) => t.id === id);
   if (!tx) return res.status(404).json({ error: "Transaction not found." });
@@ -1255,6 +1303,10 @@ app.post("/api/admin/transactions/:id/approve", (req, res) => {
 app.post("/api/admin/transactions/:id/decline", (req, res) => {
   const { id } = req.params;
   const db = getDatabase();
+  const user = getAuthenticatedUser(req, db);
+  if (!user || !user.isAdmin) {
+    return res.status(403).json({ error: "Forbidden: Admin access only." });
+  }
 
   const tx = db.transactions.find((t) => t.id === id);
   if (!tx) return res.status(404).json({ error: "Transaction not found." });
@@ -1271,6 +1323,10 @@ app.post("/api/admin/transactions/:id/decline", (req, res) => {
 // List All Investments (Admin View)
 app.get("/api/admin/investments", (req, res) => {
   const db = getDatabase();
+  const user = getAuthenticatedUser(req, db);
+  if (!user || !user.isAdmin) {
+    return res.status(403).json({ error: "Forbidden: Admin access only." });
+  }
   const enriched = db.investments.map((inv) => {
     const matchedUser = db.users.find((u) => u.id === inv.user_id);
     return {
@@ -1285,6 +1341,10 @@ app.get("/api/admin/investments", (req, res) => {
 app.post("/api/admin/investments/:id/complete", (req, res) => {
   const { id } = req.params;
   const db = getDatabase();
+  const user = getAuthenticatedUser(req, db);
+  if (!user || !user.isAdmin) {
+    return res.status(403).json({ error: "Forbidden: Admin access only." });
+  }
 
   const inv = db.investments.find((i) => i.id === id);
   if (!inv) return res.status(404).json({ error: "Investment not found." });
@@ -1317,6 +1377,10 @@ app.post("/api/admin/investments/:id/complete", (req, res) => {
 app.post("/api/admin/investments/:id/cancel", (req, res) => {
   const { id } = req.params;
   const db = getDatabase();
+  const user = getAuthenticatedUser(req, db);
+  if (!user || !user.isAdmin) {
+    return res.status(403).json({ error: "Forbidden: Admin access only." });
+  }
 
   const inv = db.investments.find((i) => i.id === id);
   if (!inv) return res.status(404).json({ error: "Investment not found." });
@@ -1346,6 +1410,10 @@ app.post("/api/admin/investments/:id/cancel", (req, res) => {
 app.post("/api/admin/plans/:id/toggle", (req, res) => {
   const { id } = req.params;
   const db = getDatabase();
+  const user = getAuthenticatedUser(req, db);
+  if (!user || !user.isAdmin) {
+    return res.status(403).json({ error: "Forbidden: Admin access only." });
+  }
 
   const plan = db.plans.find((p) => p.id === id);
   if (!plan) return res.status(404).json({ error: "Plan not found." });
@@ -1363,6 +1431,11 @@ app.post("/api/admin/plans/create", (req, res) => {
   }
 
   const db = getDatabase();
+  const user = getAuthenticatedUser(req, db);
+  if (!user || !user.isAdmin) {
+    return res.status(403).json({ error: "Forbidden: Admin access only." });
+  }
+
   const newPlan: ServerPlan = {
     id: `p-${Date.now()}`,
     name,
@@ -1381,6 +1454,10 @@ app.post("/api/admin/plans/create", (req, res) => {
 app.post("/api/admin/plans/:id/delete", (req, res) => {
   const { id } = req.params;
   const db = getDatabase();
+  const user = getAuthenticatedUser(req, db);
+  if (!user || !user.isAdmin) {
+    return res.status(403).json({ error: "Forbidden: Admin access only." });
+  }
   
   const index = db.plans.findIndex((p) => p.id === id);
   if (index === -1) return res.status(404).json({ error: "Plan not found." });
@@ -1394,6 +1471,10 @@ app.post("/api/admin/plans/:id/edit", (req, res) => {
   const { id } = req.params;
   const { name, amount, return_amount, duration_days, description } = req.body;
   const db = getDatabase();
+  const user = getAuthenticatedUser(req, db);
+  if (!user || !user.isAdmin) {
+    return res.status(403).json({ error: "Forbidden: Admin access only." });
+  }
 
   const plan = db.plans.find((p) => p.id === id);
   if (!plan) return res.status(404).json({ error: "Plan not found." });
@@ -1411,6 +1492,10 @@ app.post("/api/admin/plans/:id/edit", (req, res) => {
 // Admin Users list
 app.get("/api/admin/users", (req, res) => {
   const db = getDatabase();
+  const user = getAuthenticatedUser(req, db);
+  if (!user || !user.isAdmin) {
+    return res.status(403).json({ error: "Forbidden: Admin access only." });
+  }
   const summary = db.users.map((u) => {
     const bal_sum = calculateBalance(u.id, db.transactions);
     return {

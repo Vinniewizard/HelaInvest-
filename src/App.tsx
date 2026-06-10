@@ -151,6 +151,41 @@ export default function App() {
     checkSession();
   }, [checkSession]);
 
+  // Key combination Alt + A to toggle Admin Mode
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Robust key check for 'a' or 'A' with Alt modifier
+      if (e.altKey && (e.key === "a" || e.key === "A" || e.code === "KeyA")) {
+        e.preventDefault();
+        
+        if (currentUser) {
+          if (currentUser.isAdmin) {
+            setIsAdminMode((prev) => {
+              const nextMode = !prev;
+              if (nextMode) {
+                setCurrentTab("admin");
+                toast.success("HelaVest Secure Admin Interface Opened");
+              } else {
+                setCurrentTab("dashboard");
+                toast.info("Switched to Standard User Terminal Interface");
+              }
+              return nextMode;
+            });
+          } else {
+            toast.error("Forbidden: Your account does not have administrative privileges.");
+          }
+        } else {
+          toast.error("Access Denied: Please sign in first.");
+        }
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [currentUser]);
+
   const handleLoginSuccess = async (user: User) => {
     localStorage.setItem("hela_user_id", user.id);
     setCurrentUser(user);

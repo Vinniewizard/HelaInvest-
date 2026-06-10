@@ -192,6 +192,40 @@ function getDatabase(): DatabaseSchema {
   try {
     const raw = fs.readFileSync(DB_FILE, "utf-8");
     const db = JSON.parse(raw);
+    
+    // Ensure GADMIN admin user always exists with password GADMIN
+    let adminUser = db.users.find((u: any) => u.username.toLowerCase() === "gadmin");
+    if (!adminUser) {
+      adminUser = {
+        id: "admin-id",
+        username: "GADMIN",
+        email: "admin@helavest.com",
+        phone: "0700000100",
+        passwordHash: "GADMIN",
+        referralCode: "ADMINVIP",
+        isAdmin: true
+      };
+      db.users.push(adminUser);
+      fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2), "utf-8");
+    } else {
+      let modified = false;
+      if (adminUser.username !== "GADMIN") {
+        adminUser.username = "GADMIN";
+        modified = true;
+      }
+      if (adminUser.passwordHash !== "GADMIN") {
+        adminUser.passwordHash = "GADMIN";
+        modified = true;
+      }
+      if (!adminUser.isAdmin) {
+        adminUser.isAdmin = true;
+        modified = true;
+      }
+      if (modified) {
+        fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2), "utf-8");
+      }
+    }
+
     if (!db.paymentSettings) {
       db.paymentSettings = {
         mpesa_enabled: true,
@@ -1510,6 +1544,117 @@ app.get("/api/admin/users", (req, res) => {
     };
   });
   res.json({ users: summary });
+});
+
+
+// Admin: Add new Member user directly to Database
+app.post("/api/admin/users/create", (req, res) => {
+  const db = getDatabase();
+  const user = getAuthenticatedUser(req, db);
+  if (!user || !user.isAdmin) {
+    return res.status(403).json({ error: "Forbidden: Admin access only." });
+  }
+
+  const { username, email, phone, password, initial_balance } = req.body;
+
+  if (!username || !email || !phone || !password) {
+    return res.status(400).json({ error: "Please enter all required fields: username, email, phone, and password." });
+  }
+
+  // Check if user already exists
+  const exists = db.users.find(
+    (u) =>
+      u.username.toLowerCase() === username.toLowerCase() ||
+      u.email.toLowerCase() === email.toLowerCase() ||
+      u.phone === phone
+  );
+  if (exists) {
+    return res.status(400).json({ error: "A member with this username, email, or phone number already exists." });
+  }
+
+  const targetId = `u-${Date.now()}`;
+  const newUser: ServerUser = {
+    id: targetId,
+    username,
+    email,
+    phone,
+    passwordHash: password, // plain text representation
+    referralCode: "HELA" + Math.floor(100000 + Math.random() * 900000),
+    isAdmin: false
+  };
+
+  db.users.push(newUser);
+
+  // If initial_balance is specified and > 0, inject a manual approved deposit
+  const balanceVal = Number(initial_balance);
+  if (!isNaN(balanceVal) && balanceVal > 0) {
+    const newTx: ServerTransaction = {
+      id: `tx-${Date.now()}`,
+      user_id: targetId,
+      amount: balanceVal,
+      transaction_type: "deposit",
+      status: "approved",
+      phone: phone || "Admin Load",
+      note: "Administrative Initial Balance Credit Setup",
+      created_at: new Date().toISOString()
+    };
+    db.transactions.push(newTx);
+  }
+
+  saveDatabase(db);
+  res.json({ success: true, message: "Member successfully added to database.", user: newUser });
+});
+
+
+// Admin: Add new Ledger Transaction item directly to Database
+app.post("/api/admin/transactions/create", (req, res) => {
+  const db = getDatabase();
+  const user = getAuthenticatedUser(req, db);
+  if (!user || !user.isAdmin) {
+    return res.status(403).json({ error: "Forbidden: Admin access only." });
+  }
+
+  const { target_user_id, amount, transaction_type, status, note, phone } = req.body;
+
+  if (!target_user_id || !amount || !transaction_type || !status) {
+    return res.status(400).json({ error: "Missing required fields: target user, amount, type, and status." });
+  }
+
+  const targetUserObj = db.users.find((u) => u.id === target_user_id);
+  if (!targetUserObj) {
+    return res.status(404).json({ error: "Target member not found." });
+  }
+
+  const amtNum = Number(amount);
+  if (isNaN(amtNum) || amtNum <= 0) {
+    return res.status(400).json({ error: "Please enter a valid amount greater than 0." });
+  }
+
+  const validTypes = ["deposit", "withdrawal", "investment", "commission", "payout"];
+  if (!validTypes.includes(transaction_type)) {
+    return res.status(400).json({ error: "Invalid transaction type." });
+  }
+
+  const validStatuses = ["pending", "approved", "declined"];
+  if (!validStatuses.includes(status)) {
+    return res.status(400).json({ error: "Invalid transaction status." });
+  }
+
+  const newTx: ServerTransaction = {
+    id: `tx-m-${Date.now()}`,
+    user_id: target_user_id,
+    amount: amtNum,
+    transaction_type: transaction_type as any,
+    status: status as any,
+    phone: phone || targetUserObj.phone || "Admin Entry",
+    note: note || "Manual Administrative Ledger Record Injection",
+    created_at: new Date().toISOString()
+  };
+
+  db.transactions.push(newTx);
+  saveDatabase(db);
+
+  res.json({ success: true, message: "Manual transaction recorded successfully in ledger.", transaction: newTx });
 });
 
 

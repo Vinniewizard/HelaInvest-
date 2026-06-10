@@ -38,6 +38,106 @@ export default function AdminHub({ onRefresh }: AdminHubProps) {
   const [newPlanDesc, setNewPlanDesc] = useState("");
   const [editingPlanId, setEditingPlanId] = useState<string | null>(null);
 
+  // Manual User Registration States
+  const [addUsername, setAddUsername] = useState("");
+  const [addEmail, setAddEmail] = useState("");
+  const [addPhone, setAddPhone] = useState("");
+  const [addPassword, setAddPassword] = useState("");
+  const [addInitialBalance, setAddInitialBalance] = useState("");
+  const [userFormLoading, setUserFormLoading] = useState(false);
+
+  // Manual Ledger Injection States
+  const [txUserId, setTxUserId] = useState("");
+  const [txAmount, setTxAmount] = useState("");
+  const [txType, setTxType] = useState<"deposit" | "withdrawal" | "investment" | "commission" | "payout">("deposit");
+  const [txStatus, setTxStatus] = useState<"approved" | "pending" | "declined">("approved");
+  const [txNote, setTxNote] = useState("");
+  const [txPhone, setTxPhone] = useState("");
+  const [txFormLoading, setTxFormLoading] = useState(false);
+
+  const handleAddUserSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setMsg(null);
+    if (!addUsername || !addEmail || !addPhone || !addPassword) {
+      setMsg({ type: "error", text: "Please fill in all required user fields: Username, Email, Phone, and Password." });
+      return;
+    }
+    setUserFormLoading(true);
+    try {
+      const response = await fetch("/api/admin/users/create", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-user-id": localStorage.getItem("hela_user_id") || "",
+        },
+        body: JSON.stringify({
+          username: addUsername,
+          email: addEmail,
+          phone: addPhone,
+          password: addPassword,
+          initial_balance: Number(addInitialBalance) || 0,
+        }),
+      });
+
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error);
+
+      setMsg({ type: "success", text: `Successfully enrolled member "${addUsername}" into database!` });
+      setAddUsername("");
+      setAddEmail("");
+      setAddPhone("");
+      setAddPassword("");
+      setAddInitialBalance("");
+      await loadAdminState();
+      onRefresh();
+    } catch (err: any) {
+      setMsg({ type: "error", text: err.message || "Failed to add user." });
+    } finally {
+      setUserFormLoading(false);
+    }
+  };
+
+  const handleAddTxSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setMsg(null);
+    if (!txUserId || !txAmount || !txType || !txStatus) {
+      setMsg({ type: "error", text: "Please select a target user and set ledger amounts." });
+      return;
+    }
+    setTxFormLoading(true);
+    try {
+      const response = await fetch("/api/admin/transactions/create", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-user-id": localStorage.getItem("hela_user_id") || "",
+        },
+        body: JSON.stringify({
+          target_user_id: txUserId,
+          amount: Number(txAmount),
+          transaction_type: txType,
+          status: txStatus,
+          note: txNote,
+          phone: txPhone,
+        }),
+      });
+
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error);
+
+      setMsg({ type: "success", text: `Successfully injected administrative ledger transaction record!` });
+      setTxAmount("");
+      setTxNote("");
+      setTxPhone("");
+      await loadAdminState();
+      onRefresh();
+    } catch (err: any) {
+      setMsg({ type: "error", text: err.message || "Failed to record manual ledger transaction." });
+    } finally {
+      setTxFormLoading(false);
+    }
+  };
+
   // Payment settings state
   const [paySettings, setPaySettings] = useState({
     mpesa_enabled: true,
@@ -66,7 +166,12 @@ export default function AdminHub({ onRefresh }: AdminHubProps) {
       const pData = await plansRes.json();
       const payData = await payRes.json();
 
-      if (uData.users) setUsers(uData.users);
+      if (uData.users) {
+        setUsers(uData.users);
+        if (uData.users.length > 0) {
+          setTxUserId((prev) => prev || uData.users[0].id);
+        }
+      }
       if (tData.transactions) setTxs(tData.transactions);
       if (iData.investments) setInvestments(iData.investments);
       if (pData.plans) setPlans(pData.plans);
@@ -372,85 +477,194 @@ export default function AdminHub({ onRefresh }: AdminHubProps) {
 
       {/* Financial Queue */}
       {activeAdminTab === "transactions" && (
-        <div className="bg-[#0f131d] border border-[#212a3d] rounded-2xl overflow-hidden">
-          <div className="p-4 bg-[#0c0f16] border-b border-[#212a3d]/70">
-            <h3 className="text-xs font-extrabold text-slate-300 uppercase tracking-wider">
-              Pending and Complete Ledger Requests
-            </h3>
-          </div>
-
-          {txs.length === 0 ? (
-            <div className="p-12 text-center text-slate-500 text-xs">No transaction requests in ledger history.</div>
-          ) : (
-            <div className="overflow-x-auto text-xs">
-              <table className="w-full text-left">
-                <thead>
-                  <tr className="bg-[#0c0f16] text-slate-500 uppercase text-[9px] font-bold tracking-wider border-b border-[#212a3d]">
-                    <th className="p-4 font-semibold">User</th>
-                    <th className="p-4 font-semibold">Transfer Type</th>
-                    <th className="p-4 font-semibold">Phone (M-Pesa)</th>
-                    <th className="p-4 font-semibold">Amount</th>
-                    <th className="p-4 font-semibold">Satus</th>
-                    <th className="p-4 font-semibold text-right">Verification Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[#212a3d]/50">
-                  {txs.map((tx) => {
-                    const isPending = tx.status === "pending";
-                    return (
-                      <tr key={tx.id} className="hover:bg-[#121824]/30 font-medium">
-                        <td className="p-4 flex flex-col gap-0.5">
-                          <span className="font-bold text-slate-200">{tx.username}</span>
-                          <span className="text-[10px] text-slate-500 font-mono">ID: {tx.user_id}</span>
-                        </td>
-                        <td className="p-4">
-                          <span className="capitalize font-bold text-slate-200">{tx.transaction_type}</span>
-                          <span className="block text-[10px] text-slate-500 max-w-[150px] truncate">{tx.note}</span>
-                        </td>
-                        <td className="p-4 font-mono text-slate-400">{tx.phone || "None"}</td>
-                        <td className="p-4 font-mono font-bold text-slate-200">KSh {tx.amount.toLocaleString()}</td>
-                        <td className="p-4">
-                          <span
-                            className={`px-2 py-0.5 rounded-full border text-[9px] font-bold uppercase tracking-wider ${
-                              tx.status === "approved"
-                                ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
-                                : tx.status === "declined"
-                                ? "bg-rose-500/10 text-rose-400 border-rose-500/20"
-                                : "bg-yellow-500/10 text-yellow-400 border-yellow-500/20"
-                            }`}
-                          >
-                            {tx.status}
-                          </span>
-                        </td>
-                        <td className="p-4 text-right">
-                          {isPending ? (
-                            <div className="inline-flex gap-1.5 justify-end">
-                              <button
-                                onClick={() => handleTxApprove(tx.id)}
-                                disabled={actionLoading !== null}
-                                className="bg-[#0b251a] hover:bg-emerald-500 hover:text-slate-950 text-emerald-400 text-[10px] font-extrabold uppercase px-2.5 py-1.5 rounded-lg border border-emerald-500/20 cursor-pointer flex items-center gap-1 transition-all"
-                              >
-                                <Check className="h-3 w-3" /> Approve
-                              </button>
-                              <button
-                                onClick={() => handleTxDecline(tx.id)}
-                                disabled={actionLoading !== null}
-                                className="bg-red-500/10 hover:bg-red-600 hover:text-white text-rose-400 text-[10px] font-extrabold uppercase px-2.5 py-1.5 rounded-lg border border-red-500/20 cursor-pointer flex items-center gap-1 transition-all"
-                              >
-                                <X className="h-3 w-3" /> Decline
-                              </button>
-                            </div>
-                          ) : (
-                            <span className="text-slate-500 text-[10px] italic">Processed</span>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+          {/* Inject manual transaction form (left 5 cols) */}
+          <form onSubmit={handleAddTxSubmit} className="lg:col-span-5 bg-[#0f131d] border border-[#212a3d] rounded-2xl p-6 space-y-4 font-medium">
+            <div>
+              <h3 className="text-sm font-extrabold text-white uppercase tracking-tight flex items-center gap-1.5 bg-[#0f131d]">
+                <Plus className="h-4.5 w-4.5 text-red-500" />
+                Inject Manual Transaction
+              </h3>
+              <p className="text-[10px] text-slate-450">
+                Directly inject manual deposits, payouts, fees, withdrawals or commission entries for any user.
+              </p>
             </div>
-          )}
+
+            <div className="space-y-1">
+              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Target Member *</label>
+              <select
+                required
+                value={txUserId}
+                onChange={(e) => setTxUserId(e.target.value)}
+                className="w-full bg-[#0c0f16] border border-[#212a3d] focus:border-red-500/40 rounded-xl px-4 py-2.5 text-xs text-slate-200 font-bold outline-none font-sans cursor-pointer"
+              >
+                <option value="" disabled>Select User Account</option>
+                {users.map((u) => (
+                  <option key={u.id} value={u.id}>
+                    {u.username} ({u.phone})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Ledger Type *</label>
+                <select
+                  required
+                  value={txType}
+                  onChange={(e) => setTxType(e.target.value as any)}
+                  className="w-full bg-[#0c0f16] border border-[#212a3d] focus:border-red-500/40 rounded-xl px-4 py-2.5 text-xs text-slate-200 font-bold outline-none font-sans cursor-pointer"
+                >
+                  <option value="deposit">Deposit (Inflow)</option>
+                  <option value="withdrawal">Withdrawal (Outflow)</option>
+                  <option value="commission">Commission (Referrals)</option>
+                  <option value="payout">Payout (Earnings)</option>
+                </select>
+              </div>
+
+              <div className="space-y-1">
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Entry Status *</label>
+                <select
+                  required
+                  value={txStatus}
+                  onChange={(e) => setTxStatus(e.target.value as any)}
+                  className="w-full bg-[#0c0f16] border border-[#212a3d] focus:border-red-500/40 rounded-xl px-4 py-2.5 text-xs text-slate-200 font-bold outline-none font-sans cursor-pointer"
+                >
+                  <option value="approved">Approved (Balance Adjust)</option>
+                  <option value="pending">Pending (Awaiting Hold)</option>
+                  <option value="declined">Declined (Cancelled)</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Amount (KSh) *</label>
+                <input
+                  type="number"
+                  required
+                  placeholder="e.g. 1500"
+                  value={txAmount}
+                  onChange={(e) => setTxAmount(e.target.value)}
+                  className="w-full bg-[#0c0f16] border border-[#212a3d] focus:border-red-500/40 rounded-xl px-4 py-2.5 text-xs text-slate-200 font-mono outline-none"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Sender line / Phone</label>
+                <input
+                  type="text"
+                  placeholder="e.g. 0711223344"
+                  value={txPhone}
+                  onChange={(e) => setTxPhone(e.target.value)}
+                  className="w-full bg-[#0c0f16] border border-[#212a3d] focus:border-red-500/40 rounded-xl px-4 py-2.5 text-xs text-slate-200 font-mono outline-none"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Internal Narrative Note</label>
+              <input
+                type="text"
+                placeholder="e.g. manual balance adjustment"
+                value={txNote}
+                onChange={(e) => setTxNote(e.target.value)}
+                className="w-full bg-[#0c0f16] border border-[#212a3d] focus:border-red-500/40 rounded-xl px-4 py-2.5 text-xs text-slate-200 outline-none font-sans font-medium"
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={txFormLoading}
+              className="w-full py-3 bg-red-500 hover:bg-red-400 text-slate-950 font-bold text-xs rounded-xl flex items-center justify-center gap-2 transition-transform duration-200 cursor-pointer active:scale-[0.99] shadow-md disabled:opacity-50 font-sans"
+            >
+              <Plus className="h-4 w-4" />
+              {txFormLoading ? "Recording Transaction..." : "Inject Ledger Record"}
+            </button>
+          </form>
+
+          {/* Table list */}
+          <div className="lg:col-span-7 bg-[#0f131d] border border-[#212a3d] rounded-2xl overflow-hidden">
+            <div className="p-4 bg-[#0c0f16] border-b border-[#212a3d]/70">
+              <h3 className="text-xs font-extrabold text-slate-300 uppercase tracking-wider">
+                Pending and Complete Ledger Requests
+              </h3>
+            </div>
+
+            {txs.length === 0 ? (
+              <div className="p-12 text-center text-slate-500 text-xs">No transaction requests in ledger history.</div>
+            ) : (
+              <div className="overflow-x-auto text-xs">
+                <table className="w-full text-left">
+                  <thead>
+                    <tr className="bg-[#0c0f16] text-slate-500 uppercase text-[9px] font-bold tracking-wider border-b border-[#212a3d]">
+                      <th className="p-4 font-semibold">User</th>
+                      <th className="p-4 font-semibold">Transfer Type</th>
+                      <th className="p-4 font-semibold">Phone (M-Pesa)</th>
+                      <th className="p-4 font-semibold">Amount</th>
+                      <th className="p-4 font-semibold">Status</th>
+                      <th className="p-4 font-semibold text-right">Verification Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#212a3d]/50">
+                    {txs.map((tx) => {
+                      const isPending = tx.status === "pending";
+                      return (
+                        <tr key={tx.id} className="hover:bg-[#121824]/30 font-medium">
+                          <td className="p-4 flex flex-col gap-0.5">
+                            <span className="font-bold text-slate-200">{tx.username}</span>
+                            <span className="text-[10px] text-slate-500 font-mono">ID: {tx.user_id}</span>
+                          </td>
+                          <td className="p-4">
+                            <span className="capitalize font-bold text-slate-200">{tx.transaction_type}</span>
+                            <span className="block text-[10px] text-slate-500 max-w-[150px] truncate">{tx.note}</span>
+                          </td>
+                          <td className="p-4 font-mono text-slate-400">{tx.phone || "None"}</td>
+                          <td className="p-4 font-mono font-bold text-slate-200">KSh {tx.amount.toLocaleString()}</td>
+                          <td className="p-4">
+                            <span
+                              className={`px-2 py-0.5 rounded-full border text-[9px] font-bold uppercase tracking-wider ${
+                                tx.status === "approved"
+                                  ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
+                                  : tx.status === "declined"
+                                  ? "bg-rose-500/10 text-rose-400 border-rose-500/20"
+                                  : "bg-yellow-500/10 text-yellow-400 border-yellow-500/20"
+                              }`}
+                            >
+                              {tx.status}
+                            </span>
+                          </td>
+                          <td className="p-4 text-right">
+                            {isPending ? (
+                              <div className="inline-flex gap-1.5 justify-end">
+                                <button
+                                  onClick={() => handleTxApprove(tx.id)}
+                                  disabled={actionLoading !== null}
+                                  className="bg-[#0b251a] hover:bg-emerald-500 hover:text-slate-950 text-emerald-400 text-[10px] font-extrabold uppercase px-2.5 py-1.5 rounded-lg border border-emerald-500/20 cursor-pointer flex items-center gap-1 transition-all"
+                                >
+                                  <Check className="h-3 w-3" /> Approve
+                                </button>
+                                <button
+                                  onClick={() => handleTxDecline(tx.id)}
+                                  disabled={actionLoading !== null}
+                                  className="bg-red-500/10 hover:bg-red-650 hover:text-white text-rose-400 text-[10px] font-extrabold uppercase px-2.5 py-1.5 rounded-lg border border-red-500/20 cursor-pointer flex items-center gap-1 transition-all"
+                                >
+                                  <X className="h-3 w-3" /> Decline
+                                </button>
+                              </div>
+                            ) : (
+                              <span className="text-slate-500 text-[10px] italic">Processed</span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
@@ -539,46 +753,134 @@ export default function AdminHub({ onRefresh }: AdminHubProps) {
 
       {/* Registrations & Balances */}
       {activeAdminTab === "users" && (
-        <div className="bg-[#0f131d] border border-[#212a3d] rounded-2xl overflow-hidden">
-          <div className="p-4 bg-[#0c0f16] border-b border-[#212a3d]/70">
-            <h3 className="text-xs font-extrabold text-slate-300 uppercase tracking-wider">
-              Enrolled Members database logs
-            </h3>
-          </div>
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+          {/* Enroll user form (left 5 columns) */}
+          <form onSubmit={handleAddUserSubmit} className="lg:col-span-5 bg-[#0f131d] border border-[#212a3d] rounded-2xl p-6 space-y-4 font-medium">
+            <div>
+              <h3 className="text-sm font-extrabold text-white uppercase tracking-tight flex items-center gap-1.5 bg-[#0f131d]">
+                <Plus className="h-4.5 w-4.5 text-red-500" />
+                Enroll New Member
+              </h3>
+              <p className="text-[10px] text-slate-450">
+                Enroll a new user account directly into our cloud database.
+              </p>
+            </div>
 
-          <div className="overflow-x-auto text-xs">
-            <table className="w-full text-left">
-              <thead>
-                <tr className="bg-[#0c0f16] text-slate-500 uppercase text-[9px] font-bold tracking-wider border-b border-[#212a3d]">
-                  <th className="p-4 font-semibold">Username</th>
-                  <th className="p-4 font-semibold">Email</th>
-                  <th className="p-4 font-semibold">Phone</th>
-                  <th className="p-4 font-semibold">Referral Code</th>
-                  <th className="p-4 font-semibold text-right">Wallet Balance</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[#212a3d]/50 text-slate-300 font-medium">
-                {users.map((u) => (
-                  <tr key={u.id} className="hover:bg-[#121824]/30">
-                    <td className="p-4 font-bold text-slate-200">
-                      {u.username}{" "}
-                      {u.isAdmin && (
-                        <span className="bg-red-500/15 border border-red-500/20 text-red-400 text-[9px] px-1.5 py-0.2 rounded font-mono ml-1 font-bold">
-                          ADMIN
-                        </span>
-                      )}
-                    </td>
-                    <td className="p-4">{u.email}</td>
-                    <td className="p-4 font-mono">{u.phone}</td>
-                    <td className="p-4 font-mono font-bold text-slate-400">
-                      {u.referralCode}
-                      {u.referredBy && <span className="block text-[9px] text-slate-500 normale">Referred by ID: {u.referredBy}</span>}
-                    </td>
-                    <td className="p-4 text-right font-mono font-bold text-emerald-450">KSh {u.balance.toLocaleString()}</td>
+            <div className="space-y-1">
+              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Username *</label>
+              <input
+                type="text"
+                required
+                placeholder="e.g. JohnDoe"
+                value={addUsername}
+                onChange={(e) => setAddUsername(e.target.value)}
+                className="w-full bg-[#0c0f16] border border-[#212a3d] focus:border-red-500/40 rounded-xl px-4 py-2.5 text-xs text-slate-200 font-bold outline-none font-sans"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Email Address *</label>
+                <input
+                  type="email"
+                  required
+                  placeholder="john@example.com"
+                  value={addEmail}
+                  onChange={(e) => setAddEmail(e.target.value)}
+                  className="w-full bg-[#0c0f16] border border-[#212a3d] focus:border-red-500/40 rounded-xl px-4 py-2.5 text-xs text-slate-200 font-sans outline-none"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Phone Number *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. 0712345678"
+                  value={addPhone}
+                  onChange={(e) => setAddPhone(e.target.value)}
+                  className="w-full bg-[#0c0f16] border border-[#212a3d] focus:border-red-500/40 rounded-xl px-4 py-2.5 text-xs text-slate-200 font-mono outline-none"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Password *</label>
+                <input
+                  type="password"
+                  required
+                  placeholder="Set account password"
+                  value={addPassword}
+                  onChange={(e) => setAddPassword(e.target.value)}
+                  className="w-full bg-[#0c0f16] border border-[#212a3d] focus:border-red-500/40 rounded-xl px-4 py-2.5 text-xs text-slate-200 font-sans outline-none"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Seed Balance (KSh)</label>
+                <input
+                  type="number"
+                  placeholder="Optional, e.g. 5000"
+                  value={addInitialBalance}
+                  onChange={(e) => setAddInitialBalance(e.target.value)}
+                  className="w-full bg-[#0c0f16] border border-[#212a3d] focus:border-red-500/40 rounded-xl px-4 py-2.5 text-xs text-slate-200 font-mono outline-none"
+                />
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              disabled={userFormLoading}
+              className="w-full py-3 bg-red-500 hover:bg-red-400 text-slate-950 font-bold text-xs rounded-xl flex items-center justify-center gap-2 transition-transform duration-200 cursor-pointer active:scale-[0.99] shadow-md disabled:opacity-50"
+            >
+              <Plus className="h-4 w-4" />
+              {userFormLoading ? "Enrolling Member..." : "Enroll Active Member"}
+            </button>
+          </form>
+
+          {/* Table display (right 7 columns) */}
+          <div className="lg:col-span-7 bg-[#0f131d] border border-[#212a3d] rounded-2xl overflow-hidden">
+            <div className="p-4 bg-[#0c0f16] border-b border-[#212a3d]/70">
+              <h3 className="text-xs font-extrabold text-slate-300 uppercase tracking-wider">
+                Enrolled Members database logs
+              </h3>
+            </div>
+
+            <div className="overflow-x-auto text-xs">
+              <table className="w-full text-left">
+                <thead>
+                  <tr className="bg-[#0c0f16] text-slate-500 uppercase text-[9px] font-bold tracking-wider border-b border-[#212a3d]">
+                    <th className="p-4 font-semibold">Username</th>
+                    <th className="p-4 font-semibold">Email</th>
+                    <th className="p-4 font-semibold">Phone</th>
+                    <th className="p-4 font-semibold">Referral Code</th>
+                    <th className="p-4 font-semibold text-right">Wallet Balance</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-[#212a3d]/50 text-slate-300 font-medium">
+                  {users.map((u) => (
+                    <tr key={u.id} className="hover:bg-[#121824]/30">
+                      <td className="p-4 font-bold text-slate-200">
+                        {u.username}{" "}
+                        {u.isAdmin && (
+                          <span className="bg-red-500/15 border border-red-500/20 text-red-400 text-[9px] px-1.5 py-0.2 rounded font-mono ml-1 font-bold">
+                            ADMIN
+                          </span>
+                        )}
+                      </td>
+                      <td className="p-4">{u.email}</td>
+                      <td className="p-4 font-mono">{u.phone}</td>
+                      <td className="p-4 font-mono font-bold text-slate-400">
+                        {u.referralCode}
+                        {u.referredBy && <span className="block text-[9px] text-slate-500 normale">Referred by ID: {u.referredBy}</span>}
+                      </td>
+                      <td className="p-4 text-right font-mono font-bold text-emerald-450">KSh {u.balance.toLocaleString()}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       )}

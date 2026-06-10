@@ -5,7 +5,7 @@ import { createServer as createViteServer } from "vite";
 import crypto from "crypto";
 
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 const DB_FILE = path.join(process.cwd(), "server_db.json");
 
 app.use(express.json());

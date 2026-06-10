@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { ListTodo, TrendingUp, Sparkles, Clock, CheckCircle2, XCircle, ArrowUpRight, HelpCircle, FastForward } from "lucide-react";
 import { Investment, InvestmentStatus, WalletBalance } from "../types";
+import { useCurrency } from "../context/CurrencyContext";
 
 function LiveCountdown({ maturesAt }: { maturesAt: string }) {
   const [timeLeft, setTimeLeft] = useState<{d: number; h: number; m: number; s: number}>({ d: 0, h: 0, m: 0, s: 0 });
@@ -56,6 +57,7 @@ export default function Trades({ investments, balance, onRefresh }: TradesProps)
   const [filter, setFilter] = useState<"all" | InvestmentStatus>("all");
   const [fastForwarding, setFastForwarding] = useState<number | null>(null);
   const [simulationResult, setSimulationResult] = useState<string | null>(null);
+  const { format } = useCurrency();
 
   // Filtered investments
   const filteredInvestments = investments.filter((inv) =>
@@ -234,15 +236,15 @@ export default function Trades({ investments, balance, onRefresh }: TradesProps)
                 <div className="bg-[#0c0f16]/85 border border-[#212a3d]/50 rounded-xl p-3.5 grid grid-cols-3 gap-2 text-xs">
                   <div className="flex flex-col gap-0.5">
                     <span className="text-[9px] text-slate-500 uppercase font-bold">Principal Capital</span>
-                    <span className="font-bold text-slate-300 font-mono">KSh {inv.amount.toLocaleString()}</span>
+                    <span className="font-bold text-slate-300 font-mono">{format(inv.amount)}</span>
                   </div>
                   <div className="flex flex-col gap-0.5 items-center">
                     <span className="text-[9px] text-slate-500 uppercase font-bold">Net Profit</span>
-                    <span className="font-bold text-emerald-400 font-mono">+KSh {inv.profit.toLocaleString()}</span>
+                    <span className="font-bold text-emerald-400 font-mono">+{format(inv.profit)}</span>
                   </div>
                   <div className="flex flex-col gap-0.5 items-end">
                     <span className="text-[9px] text-slate-500 uppercase font-bold">Exp. Return</span>
-                    <span className="font-extrabold text-white font-mono">KSh {inv.return_amount.toLocaleString()}</span>
+                    <span className="font-extrabold text-white font-mono">{format(inv.return_amount)}</span>
                   </div>
                 </div>
 

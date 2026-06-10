@@ -1,6 +1,7 @@
 import React from "react";
-import { Coins, LogOut, ShieldCheck, User, TrendingUp, Wallet, ListTodo, Users } from "lucide-react";
+import { Coins, LogOut, ShieldCheck, User, TrendingUp, Wallet, ListTodo, Users, Globe } from "lucide-react";
 import { User as UserType, WalletBalance } from "../types";
+import { useCurrency, CurrencyType } from "../context/CurrencyContext";
 
 interface HeaderProps {
   user: UserType;
@@ -21,6 +22,8 @@ export default function Header({
   setIsAdminMode,
   onLogout,
 }: HeaderProps) {
+  const { activeCurrency, setCurrency } = useCurrency();
+
   return (
     <header className="sticky top-0 z-50 w-full bg-white border-b border-slate-200 shadow-sm backdrop-blur-md">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
@@ -37,8 +40,23 @@ export default function Header({
           )}
         </div>
 
+        {/* Multi-Currency Selection Controls */}
+        <div className="flex items-center gap-1.5 bg-slate-100 hover:bg-slate-200/80 px-2.5 sm:px-3 py-1.5 rounded-xl border border-slate-200 transition-colors">
+          <Globe className="h-3.5 w-3.5 text-[#006B4A]" />
+          <select
+            value={activeCurrency}
+            onChange={(e) => setCurrency(e.target.value as CurrencyType)}
+            className="bg-transparent text-xs font-bold text-slate-700 focus:outline-none cursor-pointer pr-1"
+          >
+            <option value="USD">🇺🇸 USD ($)</option>
+            <option value="KES">🇰🇪 KES (KSh)</option>
+            <option value="EUR">🇪🇺 EUR (€)</option>
+            <option value="GBP">🇬🇧 GBP (£)</option>
+          </select>
+        </div>
+
         {/* Desktop nav links */}
-        <div className="hidden sm:flex items-center justify-end px-4 gap-6 font-semibold">
+        <div className="hidden sm:flex items-center justify-end gap-6 font-semibold">
            <button onClick={() => setCurrentTab("dashboard")} className={`text-sm cursor-pointer transition-colors ${currentTab === "dashboard" ? "text-[#006B4A]" : "text-slate-600 hover:text-slate-900"}`}>Dashboard</button>
            <button onClick={onLogout} className="text-sm text-slate-600 hover:text-red-600 transition-colors cursor-pointer">Logout</button>
         </div>

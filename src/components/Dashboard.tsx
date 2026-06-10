@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { Copy, ArrowRight, ShieldAlert, Sparkles, Coins, Flame, Gem, TrendingUp, HelpCircle } from "lucide-react";
 import { User, DashboardStats, ReferralRecord, Plan, WalletBalance } from "../types";
+import { useCurrency } from "../context/CurrencyContext";
 
 interface DashboardProps {
   user: User;
@@ -16,6 +17,7 @@ interface DashboardProps {
 export default function Dashboard({ user, stats, referrals, plans, balance, onInvest, onSwitchTab, onRefresh }: DashboardProps) {
   const [loading, setLoading] = useState<string | null>(null);
   const [statusMsg, setStatusMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const { format } = useCurrency();
 
   const getTierIcon = (name: string) => {
     if (name.toLowerCase().includes("copper")) return Sparkles;
@@ -68,31 +70,31 @@ export default function Dashboard({ user, stats, referrals, plans, balance, onIn
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
         <div className="bg-white border border-slate-200 p-4 rounded-xl shadow-sm relative overflow-hidden flex flex-col justify-between">
           <div className="text-xs font-semibold text-slate-500 mb-1">Available balance</div>
-          <div className="text-xl font-bold text-slate-800 tracking-tight">KSh {stats.balance.available_balance.toLocaleString()}</div>
+          <div className="text-xl font-bold text-slate-800 tracking-tight">{format(stats.balance.available_balance)}</div>
           <div className="w-6 h-1 bg-[#006B4A] rounded-full absolute bottom-4 right-4"></div>
         </div>
         
         <div className="bg-white border border-slate-200 p-4 rounded-xl shadow-sm relative overflow-hidden flex flex-col justify-between">
           <div className="text-xs font-semibold text-slate-500 mb-1">Active capital</div>
-          <div className="text-xl font-bold text-slate-800 tracking-tight">KSh {stats.active_trades_capital.toLocaleString()}</div>
+          <div className="text-xl font-bold text-slate-800 tracking-tight">{format(stats.active_trades_capital)}</div>
           <div className="w-6 h-1 bg-[#006B4A] rounded-full absolute bottom-4 right-4"></div>
         </div>
 
         <div className="bg-white border border-slate-200 p-4 rounded-xl shadow-sm relative overflow-hidden flex flex-col justify-between">
           <div className="text-xs font-semibold text-slate-500 mb-1">Total deposits</div>
-          <div className="text-xl font-bold text-slate-800 tracking-tight">KSh {stats.balance.total_deposits.toLocaleString()}</div>
+          <div className="text-xl font-bold text-slate-800 tracking-tight">{format(stats.balance.total_deposits)}</div>
           <div className="w-6 h-1 bg-[#006B4A] rounded-full absolute bottom-4 right-4"></div>
         </div>
 
         <div className="bg-white border border-slate-200 p-4 rounded-xl shadow-sm relative overflow-hidden flex flex-col justify-between">
           <div className="text-xs font-semibold text-slate-500 mb-1">Referral bonus</div>
-          <div className="text-xl font-bold text-slate-800 tracking-tight">KSh {(stats.balance.referral_bonus || 0).toLocaleString()}</div>
+          <div className="text-xl font-bold text-slate-800 tracking-tight">{format(stats.balance.referral_bonus || 0)}</div>
           <div className="w-6 h-1 bg-[#006B4A] rounded-full absolute bottom-4 right-4"></div>
         </div>
         
         <div className="bg-white border border-slate-200 p-4 rounded-xl shadow-sm relative overflow-hidden flex flex-col justify-between">
           <div className="text-xs font-semibold text-slate-500 mb-1">Completed profit</div>
-          <div className="text-xl font-bold text-slate-800 tracking-tight">KSh {stats.total_profit_earned.toLocaleString()}</div>
+          <div className="text-xl font-bold text-slate-800 tracking-tight">{format(stats.total_profit_earned)}</div>
           <div className="w-6 h-1 bg-[#006B4A] rounded-full absolute bottom-4 right-4"></div>
         </div>
       </div>
@@ -148,7 +150,7 @@ export default function Dashboard({ user, stats, referrals, plans, balance, onIn
                 <div className="space-y-2 mb-6">
                   <div className="flex justify-between items-center text-sm border-b border-slate-100 pb-2">
                     <span className="text-slate-500 font-medium">Entry</span>
-                    <span className="font-bold text-slate-800">KSh {plan.amount.toLocaleString()}</span>
+                    <span className="font-bold text-slate-800">{format(plan.amount)}</span>
                   </div>
                   <div className="flex justify-between items-center text-sm border-b border-slate-100 pb-2">
                     <span className="text-slate-500 font-medium">ROI</span>
@@ -156,7 +158,7 @@ export default function Dashboard({ user, stats, referrals, plans, balance, onIn
                   </div>
                   <div className="flex justify-between items-center text-sm">
                     <span className="text-slate-500 font-medium">Profit</span>
-                    <span className="font-bold text-slate-800">KSh {profitVal.toLocaleString()}</span>
+                    <span className="font-bold text-slate-800">{format(profitVal)}</span>
                   </div>
                 </div>
 

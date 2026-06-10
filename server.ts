@@ -64,6 +64,13 @@ interface ServerReferral {
   created_at: string;
 }
 
+interface ServerPaymentSettings {
+  mpesa_enabled: boolean;
+  crypto_enabled: boolean;
+  nowpayments_sandbox: boolean;
+  nowpayments_api_key?: string;
+}
+
 interface DatabaseSchema {
   users: ServerUser[];
   plans: ServerPlan[];
@@ -71,6 +78,7 @@ interface DatabaseSchema {
   transactions: ServerTransaction[];
   referrals: ServerReferral[];
   systemOffsetDays: number; // For fast forwarding simulations
+  paymentSettings?: ServerPaymentSettings;
 }
 
 // -------------------------------------------------------------
@@ -169,14 +177,30 @@ function getDatabase(): DatabaseSchema {
       investments: DEFAULT_INVESTMENTS,
       transactions: DEFAULT_TRANSACTIONS,
       referrals: [],
-      systemOffsetDays: 0
+      systemOffsetDays: 0,
+      paymentSettings: {
+        mpesa_enabled: true,
+        crypto_enabled: true,
+        nowpayments_sandbox: true,
+        nowpayments_api_key: ""
+      }
     };
     fs.writeFileSync(DB_FILE, JSON.stringify(freshDb, null, 2), "utf-8");
     return freshDb;
   }
   try {
     const raw = fs.readFileSync(DB_FILE, "utf-8");
-    return JSON.parse(raw);
+    const db = JSON.parse(raw);
+    if (!db.paymentSettings) {
+      db.paymentSettings = {
+        mpesa_enabled: true,
+        crypto_enabled: true,
+        nowpayments_sandbox: true,
+        nowpayments_api_key: ""
+      };
+      fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2), "utf-8");
+    }
+    return db;
   } catch (err) {
     console.error("Failed to parse database, returning default", err);
     return {
@@ -185,7 +209,13 @@ function getDatabase(): DatabaseSchema {
       investments: DEFAULT_INVESTMENTS,
       transactions: DEFAULT_TRANSACTIONS,
       referrals: [],
-      systemOffsetDays: 0
+      systemOffsetDays: 0,
+      paymentSettings: {
+        mpesa_enabled: true,
+        crypto_enabled: true,
+        nowpayments_sandbox: true,
+        nowpayments_api_key: ""
+      }
     };
   }
 }
@@ -558,6 +588,127 @@ app.get("/api/transactions", (req, res) => {
   res.json({ transactions: myTxs });
 });
 
+// -------------------------------------------------------------
+// I&M BANK OTG INTEGRATION HELPER
+// -------------------------------------------------------------
+interface ImBankTransferResult {
+  success: boolean;
+  referenceId?: string;
+  gatewayMessage?: string;
+  error?: string;
+}
+
+async function triggerImBankDeposit(
+  amount: number,
+  phone: string,
+  txId: string,
+  username: string
+): Promise<ImBankTransferResult> {
+  const apiKey = process.env.IMBANK_API_KEY;
+  const clientId = process.env.IMBANK_CLIENT_ID;
+  const clientSecret = process.env.IMBANK_CLIENT_SECRET;
+  const baseUrl = process.env.IMBANK_API_BASE_URL || "https://api.sandbox.imbankgroup.com";
+  const customSubscriptionKey = process.env.IMBANK_SUBSCRIPTION_KEY;
+  const merchantAccount = process.env.IMBANK_MERCHANT_ACCOUNT || "1002003004";
+
+  console.log(`[I&M Bank] Attempting pay integration for ${phone} - KSh ${amount}. ID: ${txId}`);
+
+  // Base headers
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    "Accept": "application/json"
+  };
+
+  // Add subscription keys/api keys to request headers if present
+  const apimKey = apiKey || customSubscriptionKey;
+  if (apimKey) {
+    headers["Ocp-Apim-Subscription-Key"] = apimKey;
+    headers["X-API-Key"] = apimKey;
+  }
+
+  try {
+    let authToken = "";
+
+    // 1. Handle OAuth token flow if client credentials are provided
+    if (clientId && clientSecret) {
+      console.log("[I&M Bank] Exchanging client credentials for Access Token...");
+      const tokenUrl = `${baseUrl.replace(/\/$/, "")}/identity/v1/oauth2/token`;
+      
+      const authHeader = Buffer.from(`${clientId}:${clientSecret}`).toString("base64");
+      const tokenResponse = await fetch(tokenUrl, {
+        method: "POST",
+        headers: {
+          "Authorization": `Basic ${authHeader}`,
+          "Content-Type": "application/x-www-form-urlencoded",
+          ...(apimKey ? { "Ocp-Apim-Subscription-Key": apimKey } : {})
+        },
+        body: "grant_type=client_credentials"
+      });
+
+      if (tokenResponse.ok) {
+        const tokenData: any = await tokenResponse.json();
+        authToken = tokenData.access_token || "";
+        console.log("[I&M Bank] Received JWT token.");
+      } else {
+        const errText = await tokenResponse.text();
+        console.warn(`[I&M Bank Token Exchange Failed] HTTP ${tokenResponse.status}: ${errText}`);
+      }
+    }
+
+    if (authToken) {
+      headers["Authorization"] = `Bearer ${authToken}`;
+    } else if (apiKey) {
+      // If we don't have OAuth but have a direct API key, use it in Bearer form
+      headers["Authorization"] = `Bearer ${apiKey}`;
+    }
+
+    // 2. Prepare payload for the mobile money C2B request / STK Push via I&M OTG APIs
+    const payload = {
+      merchant_account: merchantAccount,
+      transaction_reference: txId,
+      amount: amount,
+      currency: "KES",
+      customer_payment_channel: "MPESA",
+      customer_phone: phone,
+      callback_url: `https://ela-invest.vercel.app/api/callbacks/imbank`,
+      narrative: `HelaVest deposit for ${username}`,
+      metadata: {
+        user_id: username,
+        reference: txId
+      }
+    };
+
+    const imResponse = await fetch(`${baseUrl.replace(/\/$/, "")}/payments/v1/mobile-checkout`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(payload)
+    });
+
+    const bodyText = await imResponse.text();
+    console.log(`[I&M Bank API Response] Code ${imResponse.status}:`, bodyText);
+
+    if (imResponse.ok) {
+      const data = JSON.parse(bodyText);
+      return {
+        success: true,
+        referenceId: data.transaction_reference || data.reference || txId,
+        gatewayMessage: data.message || "I&M STK checkout simulation push generated successfully. Please unlock and enter M-Pesa PIN."
+      };
+    } else {
+      return {
+        success: false,
+        error: `I&M API responded with status ${imResponse.status}: ${bodyText}`
+      };
+    }
+  } catch (error: any) {
+    console.error("[I&M Bank Transfer Exception]:", error);
+    return {
+      success: false,
+      error: error.message || "Network error when contacting I&M Bank OTG servers."
+    };
+  }
+}
+
 // Submit a Deposit
 app.post("/api/transactions/deposit", async (req, res) => {
   const { amount, phone, note } = req.body;
@@ -568,6 +719,12 @@ app.post("/api/transactions/deposit", async (req, res) => {
   const user = getAuthenticatedUser(req, db);
   if (!user) return res.status(401).json({ error: "Unauthorized" });
 
+  // Admin Toggle Check
+  const mpesaEnabled = db.paymentSettings?.mpesa_enabled ?? true;
+  if (!mpesaEnabled) {
+    return res.status(400).json({ error: "M-Pesa deposits are currently disabled by the administrator. Please pay using Crypto / NOWPayments!" });
+  }
+
   const pendingExists = db.transactions.some(
     (t) => t.user_id === user.id && t.transaction_type === "deposit" && t.status === "pending"
   );
@@ -577,14 +734,33 @@ app.post("/api/transactions/deposit", async (req, res) => {
 
   const txId = "tx-" + Math.random().toString(36).substr(2, 9);
   
-  // Lipia Online STK Push Integration
-  const apiKey = process.env.LIPIA_API_KEY;
-  if (apiKey) {
+  // Choose payment integration
+  const apiUnifiedKey = process.env.IMBANK_API_KEY;
+  const imClientId = process.env.IMBANK_CLIENT_ID;
+  const imClientSecret = process.env.IMBANK_CLIENT_SECRET;
+  const lipiaKey = process.env.LIPIA_API_KEY;
+
+  let gatewayUsed = "None (Simulated Sandbox)";
+  let userNotificationMsg = "Deposit requested successfully! Please trigger administrative approval in the Admin Hub.";
+
+  if (apiUnifiedKey || (imClientId && imClientSecret)) {
+    // Attempt I&M Bank Live OTG payment initiation
+    const result = await triggerImBankDeposit(Number(amount), phone, txId, user.username);
+    if (result.success) {
+      gatewayUsed = "I&M Bank API Gateway";
+      userNotificationMsg = result.gatewayMessage || `I&M Bank payment prompt initiated successfully on ${phone}. Standard settlement holds.`;
+    } else {
+      console.warn(`[I&M GATEWAY WARNING] Direct API call returned error: ${result.error}. Defaulting with Sandbox simulation fallback trace.`);
+      gatewayUsed = "I&M Sandbox Simulation (API Mismatch Fallback)";
+      userNotificationMsg = `[I&M Bank Integration Connected] Credentials registered. Direct checkout returned an error (${result.error || "Access Denied"}). A mock pending deposit request has been registered under sandbox mode so you are safe to test this in the Admin Hub!`;
+    }
+  } else if (lipiaKey) {
+    // Lipia Online M-Pesa push fallback trace
     try {
       const lipiaResponse = await fetch('https://lipia-api.kreativelabske.com/api/v2/payments/stk-push', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${apiKey}`,
+          'Authorization': `Bearer ${lipiaKey}`,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
@@ -598,16 +774,22 @@ app.post("/api/transactions/deposit", async (req, res) => {
         })
       });
       const lipiaResult = await lipiaResponse.json();
-      if (!lipiaResult.success) {
-        console.error("Lipia API Error:", lipiaResult);
+      if (lipiaResult.success) {
+        gatewayUsed = "Lipia Online STK Push";
+        userNotificationMsg = lipiaResult.customerMessage || "M-Pesa payment prompt sent to your phone. Enter PIN to complete deposit.";
+      } else {
+        console.error("Lipia API Failure:", lipiaResult);
+        gatewayUsed = "Lipia (Error State)";
         return res.status(400).json({ error: lipiaResult.customerMessage || "Failed to initiate M-Pesa payment prompt." });
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error("Error connecting to Lipia:", err);
       return res.status(500).json({ error: "Failed to connect to M-Pesa payment gateway." });
     }
   } else {
-    console.warn("LIPIA_API_KEY not found. Simulating STK Push.");
+    // Sandbox simulation fallback mode
+    gatewayUsed = "Hela Sandbox System Mode";
+    userNotificationMsg = `[Sandbox Mode] Since neither LIPIA_API_KEY nor I&M credentials are live in environment, a simulated deposit request has been logged! Please switch to the "Admin Hub" to instantly approve this mock funding trace.`;
   }
 
   const newTx: ServerTransaction = {
@@ -617,14 +799,330 @@ app.post("/api/transactions/deposit", async (req, res) => {
     transaction_type: "deposit",
     status: "pending",
     phone: phone,
-    note: note || "Wallet M-Pesa Topup",
+    note: note || `Wallet Topup (via ${gatewayUsed})`,
     created_at: new Date().toISOString()
   };
 
   db.transactions.push(newTx);
   saveDatabase(db);
 
-  res.json({ success: true, transaction: newTx, message: "M-Pesa payment prompt initiated successfully. Please enter your PIN." });
+  res.json({ success: true, transaction: newTx, message: userNotificationMsg });
+});
+
+// Lipia Online Callback Handler
+app.post("/api/callbacks/lipia", (req, res) => {
+  console.log("[Lipia Callback Received]:", JSON.stringify(req.body));
+  const { success, status, data, external_reference, transaction_reference } = req.body;
+  
+  let reference = external_reference || transaction_reference;
+  let isSuccess = success === true || status === "success" || status === "COMPLETED";
+  
+  if (data) {
+    if (data.external_reference) reference = data.external_reference;
+    else if (data.TransactionReference) reference = data.TransactionReference;
+    else if (data.reference) reference = data.reference;
+    
+    if (data.status) {
+      isSuccess = data.status === "success" || data.status === "COMPLETED" || data.status === 0;
+    }
+  }
+
+  if (!reference) {
+    console.warn("[Lipia Webhook] Missing reference in body.", req.body);
+    return res.status(400).json({ error: "Missing reference" });
+  }
+
+  const db = getDatabase();
+  const tx = db.transactions.find((t) => t.id === reference);
+  if (!tx) {
+    console.warn(`[Lipia Webhook] Transaction with reference ${reference} not found in database.`);
+    return res.status(404).json({ error: "Transaction not found" });
+  }
+
+  if (tx.status !== "pending") {
+    console.log(`[Lipia Webhook] Transaction ${reference} is already in state: ${tx.status}. Ignoring callback duplicate.`);
+    return res.json({ success: true, message: "Already processed" });
+  }
+
+  if (isSuccess) {
+    tx.status = "approved";
+  } else {
+    tx.status = "declined";
+  }
+  
+  saveDatabase(db);
+  console.log(`[Lipia Webhook] Transaction ${reference} updated successfully to: ${tx.status}`);
+  res.json({ success: true, message: "Webhook processed successfully" });
+});
+
+// -------------------------------------------------------------
+// NOWPAYMENTS CRYPTO INTEGRATION HELPER
+// -------------------------------------------------------------
+async function triggerNowPaymentsDeposit(
+  amountKES: number,
+  cryptoCurrency: string,
+  txId: string,
+  username: string,
+  db: DatabaseSchema
+): Promise<{
+  success: boolean;
+  payAddress?: string;
+  payAmount?: number;
+  paymentId?: string;
+  gatewayMessage?: string;
+  error?: string;
+}> {
+  const isSandbox = db.paymentSettings?.nowpayments_sandbox ?? true;
+  const apiKey = db.paymentSettings?.nowpayments_api_key || process.env.NOWPAYMENTS_API_KEY;
+
+  // Calculate amount in USD (primary base currency for NOWPayments)
+  const amountUSD = Number((amountKES / 130).toFixed(2));
+  const normalizedCrypto = cryptoCurrency.toLowerCase();
+
+  console.log(`[NOWPayments] Initiating payment. Amount KES: ${amountKES} (~$${amountUSD} USD). Crypto: ${cryptoCurrency}. TX: ${txId}. Sandbox: ${isSandbox}`);
+
+  if (isSandbox || !apiKey) {
+    // Generate lovely realistic mock data for preview sandbox mode
+    const mockAddresses: Record<string, string> = {
+      btc: "bc1q7nry5t3v84u728p9gjrsqyzb3f83kkm0wlh",
+      eth: "0x71C46E91F7C1CC2E123af6c63E32630FF0E9Fdc9",
+      usdttrc20: "TXPrt123T77gV5bE888D16H91F7C1CabcD",
+      usdcerp20: "0x32630FF0E9Fdc971C46E91F7C1CC2E123af6c",
+      usdtbsc: "0x0B6bc1AbCdE9Fdc971C46E91F7C1CC2E123af6c"
+    };
+    
+    // Simple mock exchange rates relative to USD
+    const mockRates: Record<string, number> = {
+      btc: 0.0000155,
+      eth: 0.00032,
+      usdttrc20: 1.0,
+      usdcerp20: 1.0,
+      usdtbsc: 1.0
+    };
+
+    const rate = mockRates[normalizedCrypto] || 1.0;
+    const cryptoAmount = Number((amountUSD * rate).toFixed(6));
+    const payAddress = mockAddresses[normalizedCrypto] || "0x71C46E91F7C1CC2E123af6c63E32630FF0E9Fdc9";
+
+    return {
+      success: true,
+      payAddress,
+      payAmount: cryptoAmount,
+      paymentId: "nw-" + Math.floor(100000000 + Math.random() * 900000000).toString(),
+      gatewayMessage: `🎉 Simulated crypto payment generated successfully relative to your USD amount ($${amountUSD} USD and ${cryptoAmount} ${cryptoCurrency.toUpperCase()}). Please proceed with sandbox payment!`
+    };
+  }
+
+  // Live NOWPayments API Call
+  try {
+    const response = await fetch("https://api.nowpayments.io/v1/payment", {
+      method: "POST",
+      headers: {
+        "x-api-key": apiKey,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        price_amount: amountUSD,
+        price_currency: "usd",
+        pay_amount: null,
+        pay_currency: normalizedCrypto,
+        ipn_callback_url: "https://ais-dev-yb5liyh6fvh47qawmql43k-597530057912.europe-west2.run.app/api/callbacks/nowpayments",
+        order_id: txId,
+        order_description: `HelaVest Crypto Deposit for ${username}`
+      })
+    });
+
+    const data: any = await response.json();
+    console.log("[NOWPayments API Response]:", data);
+
+    if (response.ok && data.payment_id) {
+      return {
+        success: true,
+        payAddress: data.pay_address,
+        payAmount: data.pay_amount,
+        paymentId: data.payment_id,
+        gatewayMessage: "Live crypto deposit generated successfully via NOWPayments client interface."
+      };
+    } else {
+      return {
+        success: false,
+        error: data.message || `NOWPayments API Error: HTTP ${response.status}`
+      };
+    }
+  } catch (err: any) {
+    console.error("[NOWPayments Connection Exception]:", err);
+    return {
+      success: false,
+      error: err.message || "Failed to establish secure connection with NOWPayments network."
+    };
+  }
+}
+
+// -------------------------------------------------------------
+// USER PAYMENT SETTINGS & CRYPTO DEPOSIT ROUTINGS
+// -------------------------------------------------------------
+
+// Fetch Active Public Payment Settings
+app.get("/api/payment-settings", (req, res) => {
+  const db = getDatabase();
+  res.json({
+    paymentSettings: {
+      mpesa_enabled: db.paymentSettings?.mpesa_enabled ?? true,
+      crypto_enabled: db.paymentSettings?.crypto_enabled ?? true,
+      nowpayments_sandbox: db.paymentSettings?.nowpayments_sandbox ?? true
+    }
+  });
+});
+
+// Create Crypto Deposit
+app.post("/api/transactions/deposit-crypto", async (req, res) => {
+  const { amount, cryptoCurrency, note } = req.body;
+  if (!amount || amount <= 0) {
+    return res.status(400).json({ error: "Please enter a valid deposit amount." });
+  }
+  if (!cryptoCurrency) {
+    return res.status(400).json({ error: "Please choose a cryptocurrency." });
+  }
+
+  const db = getDatabase();
+  const user = getAuthenticatedUser(req, db);
+  if (!user) return res.status(401).json({ error: "Unauthorized" });
+
+  // Check admin settings
+  const cryptoEnabled = db.paymentSettings?.crypto_enabled ?? true;
+  if (!cryptoEnabled) {
+    return res.status(400).json({ error: "Cryptocurrency deposits are currently deactivated by the administrator." });
+  }
+
+  const pendingExists = db.transactions.some(
+    (t) => t.user_id === user.id && t.transaction_type === "deposit" && t.status === "pending"
+  );
+  if (pendingExists) {
+    return res.status(400).json({ error: "You already have a pending deposit request. Please wait for previous request clearance." });
+  }
+
+  const txId = "tx-crypto-" + Math.random().toString(36).substr(2, 9);
+
+  // Trigger NOWPayments initiation
+  const result = await triggerNowPaymentsDeposit(Number(amount), cryptoCurrency, txId, user.username, db);
+
+  if (!result.success) {
+    return res.status(400).json({ error: result.error || "Failed to generate crypto payment invoice." });
+  }
+
+  const newTx: any = {
+    id: txId,
+    user_id: user.id,
+    amount: Number(amount),
+    transaction_type: "deposit",
+    status: "pending",
+    phone: `Crypto (${cryptoCurrency.toUpperCase()})`,
+    note: note || `Crypto Wallet Topup via NOWPayments`,
+    created_at: new Date().toISOString(),
+    // Store metadata
+    crypto_address: result.payAddress,
+    crypto_amount: result.payAmount,
+    crypto_currency: cryptoCurrency.toUpperCase(),
+    payment_id: result.paymentId
+  };
+
+  db.transactions.push(newTx);
+  saveDatabase(db);
+
+  res.json({
+    success: true,
+    transaction: newTx,
+    message: result.gatewayMessage || "Crypto payment prompt initialized.",
+    paymentDetails: {
+      payAddress: result.payAddress,
+      payAmount: result.payAmount,
+      paymentId: result.paymentId,
+      cryptoCurrency: cryptoCurrency.toUpperCase(),
+      priceAmountUSD: Number((amount / 130).toFixed(2))
+    }
+  });
+});
+
+// NOWPayments IPN Webhook Receiver
+app.post("/api/callbacks/nowpayments", (req, res) => {
+  console.log("[NOWPayments IPN Webhook Received]:", JSON.stringify(req.body));
+  const { payment_status, order_id } = req.body;
+  
+  if (!order_id) {
+    return res.status(400).json({ error: "Missing order_id reference." });
+  }
+
+  const db = getDatabase();
+  const tx = db.transactions.find((t) => t.id === order_id);
+  if (!tx) {
+    console.warn(`[NOWPayments IPN] Transaction with order_id ${order_id} not found.`);
+    return res.status(404).json({ error: "Transaction not found." });
+  }
+
+  if (tx.status !== "pending") {
+    console.log(`[NOWPayments IPN] Transaction ${order_id} already in state: ${tx.status}. Ignoring callback.`);
+    return res.json({ success: true, message: "Already processed" });
+  }
+
+  if (payment_status === "confirmed" || payment_status === "finished") {
+    tx.status = "approved";
+  } else if (payment_status === "failed" || payment_status === "expired") {
+    tx.status = "declined";
+  }
+
+  saveDatabase(db);
+  console.log(`[NOWPayments IPN] Transaction ${order_id} updated successfully to: ${tx.status}`);
+  res.json({ success: true, message: "IPN processed successfully." });
+});
+
+// Simulate Crypto Clearance Instant in Sandbox
+app.post("/api/transactions/:id/simulate-sandbox-clear", (req, res) => {
+  const { id } = req.params;
+  const db = getDatabase();
+  
+  const tx = db.transactions.find((t) => t.id === id);
+  if (!tx) return res.status(404).json({ error: "Transaction not found." });
+  
+  if (tx.status !== "pending") {
+    return res.status(400).json({ error: "Transaction is already processed." });
+  }
+
+  tx.status = "approved";
+  saveDatabase(db);
+  
+  res.json({ success: true, message: "Sandbox blockchain simulation completed! Your deposit was approved and cleared." });
+});
+
+// -------------------------------------------------------------
+// SECURE ADMIN PAYMENT CONFIGS ENDPOINTS
+// -------------------------------------------------------------
+
+app.get("/api/admin/payment-settings", (req, res) => {
+  const db = getDatabase();
+  const user = getAuthenticatedUser(req, db);
+  if (!user || !user.isAdmin) {
+    return res.status(403).json({ error: "Forbidden: Admin access only." });
+  }
+  res.json({ paymentSettings: db.paymentSettings });
+});
+
+app.post("/api/admin/payment-settings", (req, res) => {
+  const db = getDatabase();
+  const user = getAuthenticatedUser(req, db);
+  if (!user || !user.isAdmin) {
+    return res.status(403).json({ error: "Forbidden: Admin access only." });
+  }
+  const { mpesa_enabled, crypto_enabled, nowpayments_sandbox, nowpayments_api_key } = req.body;
+  
+  db.paymentSettings = {
+    mpesa_enabled: mpesa_enabled !== undefined ? !!mpesa_enabled : (db.paymentSettings?.mpesa_enabled ?? true),
+    crypto_enabled: crypto_enabled !== undefined ? !!crypto_enabled : (db.paymentSettings?.crypto_enabled ?? true),
+    nowpayments_sandbox: nowpayments_sandbox !== undefined ? !!nowpayments_sandbox : (db.paymentSettings?.nowpayments_sandbox ?? true),
+    nowpayments_api_key: nowpayments_api_key !== undefined ? nowpayments_api_key : (db.paymentSettings?.nowpayments_api_key || "")
+  };
+  
+  saveDatabase(db);
+  res.json({ success: true, paymentSettings: db.paymentSettings, message: "Gateway settings updated successfully." });
 });
 
 // Submit a Withdrawal

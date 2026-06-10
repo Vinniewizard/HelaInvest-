@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { Coins, Flame, Gem, ShieldAlert, Sparkles, TrendingUp, HelpCircle, ArrowRight } from "lucide-react";
 import { Plan, WalletBalance } from "../types";
+import { useCurrency } from "../context/CurrencyContext";
 
 interface InvestProps {
   plans: Plan[];
@@ -13,6 +14,7 @@ export default function Invest({ plans, balance, onInvest, onSwitchTab }: Invest
   const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null);
   const [loading, setLoading] = useState<string | null>(null);
   const [statusMsg, setStatusMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const { format } = useCurrency();
 
   // Auto-select first plan on load if none selected
   if (!selectedPlan && plans.length > 0) {
@@ -107,7 +109,7 @@ export default function Invest({ plans, balance, onInvest, onSwitchTab }: Invest
                     />
                   </div>
                   <h3 className="text-xl font-extrabold text-white font-mono">
-                    KSh {plan.amount.toLocaleString()}
+                    {format(plan.amount)}
                   </h3>
                   <p className="text-[10px] text-slate-400 mt-1.5 leading-relaxed font-medium">
                     {plan.description || "Micro-finance daily compounding yield package."}
@@ -155,13 +157,13 @@ export default function Invest({ plans, balance, onInvest, onSwitchTab }: Invest
                   <div className="flex flex-col gap-0.5">
                     <span className="text-[10px] text-slate-500 uppercase font-bold">Capital Required</span>
                     <span className="text-sm font-bold text-slate-200 font-mono">
-                      KSh {selectedPlan.amount.toLocaleString()}
+                      {format(selectedPlan.amount)}
                     </span>
                   </div>
                   <div className="flex flex-col gap-0.5 items-end">
                     <span className="text-[10px] text-slate-500 uppercase font-bold">Target Payout</span>
                     <span className="text-sm font-extrabold text-emerald-400 font-mono">
-                      KSh {selectedPlan.return_amount.toLocaleString()}
+                      {format(selectedPlan.return_amount)}
                     </span>
                   </div>
                 </div>
@@ -174,7 +176,7 @@ export default function Invest({ plans, balance, onInvest, onSwitchTab }: Invest
                   <div className="flex flex-col gap-0.5 items-end">
                     <span className="text-[10px] text-slate-500 uppercase font-bold">Net Profit</span>
                     <span className="text-xs font-bold text-teal-400 font-mono">
-                      +KSh {(selectedPlan.return_amount - selectedPlan.amount).toLocaleString()}
+                      +{format(selectedPlan.return_amount - selectedPlan.amount)}
                     </span>
                   </div>
                 </div>
@@ -182,7 +184,7 @@ export default function Invest({ plans, balance, onInvest, onSwitchTab }: Invest
                 <div className="pt-2 border-t border-[#212a3d]/50 flex items-center justify-between text-xs">
                   <span className="text-[10px] text-slate-500 uppercase font-bold">Daily Earnings Yield</span>
                   <span className="font-bold text-slate-300 font-mono">
-                    KSh {Math.round((selectedPlan.return_amount - selectedPlan.amount) / selectedPlan.duration_days).toLocaleString()}
+                    {format(Math.round((selectedPlan.return_amount - selectedPlan.amount) / selectedPlan.duration_days))}
                     <span className="text-[10px] text-slate-500">/day</span>
                   </span>
                 </div>
@@ -193,7 +195,7 @@ export default function Invest({ plans, balance, onInvest, onSwitchTab }: Invest
                 <div className="bg-yellow-500/10 border border-yellow-500/15 rounded-xl p-3 text-[11px] text-yellow-300 leading-relaxed flex flex-col gap-1.5">
                   <p className="font-bold flex items-center gap-1">⚠️ Low Available Wallet Balance</p>
                   <p className="text-slate-400">
-                    Your available balance is <span className="font-bold text-white font-mono">KSh {balance.available_balance.toLocaleString()}</span>. You require an additional <span className="font-bold text-white font-mono">KSh {(selectedPlan.amount - balance.available_balance).toLocaleString()}</span> to activate this plan.
+                    Your available balance is <span className="font-bold text-white font-mono">{format(balance.available_balance)}</span>. You require an additional <span className="font-bold text-white font-mono">{format(selectedPlan.amount - balance.available_balance)}</span> to activate this plan.
                   </p>
                   <button
                     onClick={() => onSwitchTab("wallet")}

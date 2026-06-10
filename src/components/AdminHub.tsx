@@ -18,7 +18,7 @@ interface AdminUserSummary {
 }
 
 export default function AdminHub({ onRefresh }: AdminHubProps) {
-  const [activeAdminTab, setActiveAdminTab] = useState<"users" | "transactions" | "investments" | "plans">("transactions");
+  const [activeAdminTab, setActiveAdminTab] = useState<"users" | "transactions" | "investments" | "plans" | "payment_settings">("transactions");
 
   // State data loaded directly
   const [users, setUsers] = useState<AdminUserSummary[]>([]);
@@ -38,27 +38,41 @@ export default function AdminHub({ onRefresh }: AdminHubProps) {
   const [newPlanDesc, setNewPlanDesc] = useState("");
   const [editingPlanId, setEditingPlanId] = useState<string | null>(null);
 
+  // Payment settings state
+  const [paySettings, setPaySettings] = useState({
+    mpesa_enabled: true,
+    crypto_enabled: true,
+    nowpayments_sandbox: true,
+    nowpayments_api_key: "",
+  });
+  const [paySettingsLoading, setPaySettingsLoading] = useState(false);
+
   const loadAdminState = async () => {
     try {
       const h_id = localStorage.getItem("hela_user_id") || "";
       const opt = { headers: { "x-user-id": h_id } };
 
-      const [usersRes, txsRes, invRes, plansRes] = await Promise.all([
+      const [usersRes, txsRes, invRes, plansRes, payRes] = await Promise.all([
         fetch("/api/admin/users", opt),
         fetch("/api/admin/transactions", opt),
         fetch("/api/admin/investments", opt),
         fetch("/api/plans"),
+        fetch("/api/admin/payment-settings", opt),
       ]);
 
       const uData = await usersRes.json();
       const tData = await txsRes.json();
       const iData = await invRes.json();
       const pData = await plansRes.json();
+      const payData = await payRes.json();
 
       if (uData.users) setUsers(uData.users);
       if (tData.transactions) setTxs(tData.transactions);
       if (iData.investments) setInvestments(iData.investments);
       if (pData.plans) setPlans(pData.plans);
+      if (payData.paymentSettings) {
+        setPaySettings(payData.paymentSettings);
+      }
     } catch (err) {
       console.error("Failed to load admin logs", err);
     }
@@ -263,6 +277,29 @@ export default function AdminHub({ onRefresh }: AdminHubProps) {
     }
   };
 
+  const handlePaymentSettingsSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setMsg(null);
+    setPaySettingsLoading(true);
+    try {
+      const res = await fetch("/api/admin/payment-settings", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-user-id": localStorage.getItem("hela_user_id") || "",
+        },
+        body: JSON.stringify(paySettings),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setMsg({ type: "success", text: "Global Payment configs updated and applied instantly to cashier ledger!" });
+    } catch (err: any) {
+      setMsg({ type: "error", text: err.message || "Failed to save gateway config settings." });
+    } finally {
+      setPaySettingsLoading(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Title block */}
@@ -308,6 +345,7 @@ export default function AdminHub({ onRefresh }: AdminHubProps) {
           { id: "investments", label: "Active Trade Controller", icon: ListTodo },
           { id: "users", label: "Registrations & Balances", icon: Users },
           { id: "plans", label: "Yield Packages & Seeding", icon: Server },
+          { id: "payment_settings", label: "Gateways Control Center", icon: ToggleRight },
         ].map((tab) => {
           const Icon = tab.icon;
           const isActive = activeAdminTab === tab.id;
@@ -697,6 +735,144 @@ export default function AdminHub({ onRefresh }: AdminHubProps) {
             </div>
           </div>
         </div>
+      )}
+
+      {activeAdminTab === "payment_settings" && (
+        <form onSubmit={handlePaymentSettingsSubmit} className="space-y-6 bg-[#0f131d] border border-[#212a3d] rounded-2xl p-6">
+          <div className="border-b border-[#212a3d] pb-4">
+            <h3 className="text-sm font-extrabold text-white uppercase tracking-wider flex items-center gap-1.5">
+              <ToggleRight className="text-emerald-400 h-4.5 w-4.5" />
+              Global Payment Gateways Control Desk
+            </h3>
+            <p className="text-[11px] text-slate-400 mt-1 font-medium select-none">
+              Control which checkout methods are active for users, configure access credentials, and activate test frameworks instantly.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
+            {/* Safaricom M-Pesa Integration (Lipia Online API) */}
+            <div className="bg-[#0c0f16]/90 border border-[#212a3d] p-5 rounded-xl space-y-4">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-black text-emerald-400 uppercase tracking-widest block font-sans">
+                  Safaricom M-Pesa Mobile Method
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setPaySettings({ ...paySettings, mpesa_enabled: !paySettings.mpesa_enabled })}
+                  className="bg-[#182030] border border-[#212a3d] rounded-xl px-3 py-1.5 text-[10px] uppercase font-bold text-slate-300 flex items-center gap-1.5 hover:text-white transition-colors cursor-pointer"
+                >
+                  {paySettings.mpesa_enabled ? (
+                    <>
+                      <ToggleRight className="h-5 w-5 text-emerald-400" />
+                      Status: Active
+                    </>
+                  ) : (
+                    <>
+                      <ToggleLeft className="h-5 w-5 text-slate-500" />
+                      Status: Disabled
+                    </>
+                  )}
+                </button>
+              </div>
+              <p className="text-[11px] leading-relaxed text-slate-400">
+                When enabled, clients can trigger Lipia Online STK pushes on their mobile lines to prompt direct credential payments using dynamic display currencies.
+              </p>
+              <div className="text-[10px] text-slate-500 border-t border-[#212a3d]/60 pt-2 leading-relaxed">
+                <span>Note: The target API route uses the verified Lipia Online documentation endpoint internally. All mobile deposits require final manager validation/approval inside the Financial Approvals tab.</span>
+              </div>
+            </div>
+
+            {/* NOWPayments Cryptocurency Integration */}
+            <div className="bg-[#0c0f16]/90 border border-[#212a3d] p-5 rounded-xl space-y-4">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-black text-indigo-400 uppercase tracking-widest block font-sans">
+                  NOWPayments Crypto Gateway
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setPaySettings({ ...paySettings, crypto_enabled: !paySettings.crypto_enabled })}
+                  className="bg-[#182030] border border-[#212a3d] rounded-xl px-3 py-1.5 text-[10px] uppercase font-bold text-slate-300 flex items-center gap-1.5 hover:text-white transition-colors cursor-pointer"
+                >
+                  {paySettings.crypto_enabled ? (
+                    <>
+                      <ToggleRight className="h-5 w-5 text-indigo-400" />
+                      Status: Active
+                    </>
+                  ) : (
+                    <>
+                      <ToggleLeft className="h-5 w-5 text-slate-500" />
+                      Status: Disabled
+                    </>
+                  )}
+                </button>
+              </div>
+
+              <p className="text-[11px] leading-relaxed text-slate-400">
+                When active, clients can create automatic payments in USDT (TRC-20), BTC, ETH, and USDC. The exchange amount and receiving wallet are populated on-the-fly.
+              </p>
+
+              {/* API Key configuration input */}
+              <div className="space-y-1.5">
+                <label className="block text-[10px] text-slate-400 uppercase font-bold">
+                  NOWPayments API Credentials Key *
+                </label>
+                <input
+                  type="password"
+                  placeholder={paySettings.nowpayments_api_key ? "••••••••••••••••••••••••••••" : "Enter your NOWPayments API Key"}
+                  value={paySettings.nowpayments_api_key || ""}
+                  onChange={(e) => setPaySettings({ ...paySettings, nowpayments_api_key: e.target.value })}
+                  className="w-full bg-[#0c0f16] border border-[#212a3d] focus:border-indigo-500/40 rounded-xl px-3.5 py-2 text-xs text-slate-200 font-mono outline-none"
+                />
+                <span className="text-[9px] text-indigo-300 block select-none">
+                  Obtain your key from account.nowpayments.io setting dashboard panel.
+                </span>
+              </div>
+
+              {/* Sandbox toggle control */}
+              <div className="flex items-center justify-between pt-1 border-t border-[#212a3d]/50">
+                <div className="text-left font-sans pr-4">
+                  <span className="text-[11px] text-slate-300 font-extrabold block">Sandbox Demo Mode</span>
+                  <span className="text-[9px] text-slate-500 leading-none">Uses simulator payload parameters avoiding real-world transactions</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setPaySettings({ ...paySettings, nowpayments_sandbox: !paySettings.nowpayments_sandbox })}
+                  className="bg-[#182030] border border-[#212a3d] rounded-xl px-2.5 py-1.5 text-[10px] uppercase font-bold text-slate-300 flex items-center gap-1.5 hover:text-white transition-colors cursor-pointer"
+                >
+                  {paySettings.nowpayments_sandbox ? (
+                    <>
+                      <ToggleRight className="h-4.5 w-4.5 text-[#006B4A]" />
+                      Demo Sandbox Active
+                    </>
+                  ) : (
+                    <>
+                      <ToggleLeft className="h-4.5 w-4.5 text-slate-600" />
+                      Live Crypto Blockchain
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Submit bar */}
+          <div className="border-t border-[#212a3d] pt-4.5 flex items-center justify-end">
+            <button
+              type="submit"
+              disabled={paySettingsLoading}
+              className="px-6 py-2.5 bg-red-500 hover:bg-red-400 text-slate-950 font-extrabold text-xs rounded-xl cursor-pointer transition-colors shadow-md flex items-center gap-1.5"
+            >
+              {paySettingsLoading ? (
+                <span className="h-3.5 w-3.5 border-2 border-slate-950 border-t-transparent rounded-full animate-spin"></span>
+              ) : (
+                <>
+                  <Check className="h-4 w-4" />
+                  Apply Gateway Configurations
+                </>
+              )}
+            </button>
+          </div>
+        </form>
       )}
     </div>
   );

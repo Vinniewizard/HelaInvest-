@@ -186,7 +186,7 @@ function getDatabase(): DatabaseSchema {
       paymentSettings: {
         mpesa_enabled: true,
         crypto_enabled: true,
-        nowpayments_sandbox: true,
+        nowpayments_sandbox: false,
         nowpayments_api_key: ""
       }
     };
@@ -234,7 +234,7 @@ function getDatabase(): DatabaseSchema {
       db.paymentSettings = {
         mpesa_enabled: true,
         crypto_enabled: true,
-        nowpayments_sandbox: true,
+        nowpayments_sandbox: false,
         nowpayments_api_key: ""
       };
       fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2), "utf-8");
@@ -252,7 +252,7 @@ function getDatabase(): DatabaseSchema {
       paymentSettings: {
         mpesa_enabled: true,
         crypto_enabled: true,
-        nowpayments_sandbox: true,
+        nowpayments_sandbox: false,
         nowpayments_api_key: ""
       }
     };
@@ -911,7 +911,7 @@ async function triggerNowPaymentsDeposit(
   gatewayMessage?: string;
   error?: string;
 }> {
-  const isSandbox = db.paymentSettings?.nowpayments_sandbox ?? true;
+  const isSandbox = db.paymentSettings?.nowpayments_sandbox ?? false;
   const apiKey = db.paymentSettings?.nowpayments_api_key || process.env.NOWPAYMENTS_API_KEY;
 
   // Calculate amount in USD (primary base currency for NOWPayments)
@@ -920,7 +920,14 @@ async function triggerNowPaymentsDeposit(
 
   console.log(`[NOWPayments] Initiating payment. Amount KES: ${amountKES} (~$${amountUSD} USD). Crypto: ${cryptoCurrency}. TX: ${txId}. Sandbox: ${isSandbox}`);
 
-  if (isSandbox || !apiKey) {
+  if (!isSandbox && !apiKey) {
+    return {
+      success: false,
+      error: "NOWPayments API Key is not configured by the administrator. Please update secure payment settings inside the Admin Hub or define NOWPAYMENTS_API_KEY in environment variables."
+    };
+  }
+
+  if (isSandbox) {
     // Generate lovely realistic mock data for preview sandbox mode
     const mockAddresses: Record<string, string> = {
       btc: "bc1q7nry5t3v84u728p9gjrsqyzb3f83kkm0wlh",
@@ -1013,7 +1020,7 @@ app.get("/api/payment-settings", (req, res) => {
     paymentSettings: {
       mpesa_enabled: db.paymentSettings?.mpesa_enabled ?? true,
       crypto_enabled: db.paymentSettings?.crypto_enabled ?? true,
-      nowpayments_sandbox: db.paymentSettings?.nowpayments_sandbox ?? true
+      nowpayments_sandbox: db.paymentSettings?.nowpayments_sandbox ?? false
     }
   });
 });
@@ -1187,7 +1194,7 @@ app.post("/api/transactions/:id/check-crypto-status", async (req, res) => {
     return res.status(400).json({ error: "No NOWPayments invoice reference associated with this transaction." });
   }
 
-  const isSandbox = db.paymentSettings?.nowpayments_sandbox ?? true;
+  const isSandbox = db.paymentSettings?.nowpayments_sandbox ?? false;
 
   // If Sandbox simulated payment was created (starts with nw-)
   if (paymentId.startsWith("nw-")) {
@@ -1283,7 +1290,7 @@ app.post("/api/admin/payment-settings", (req, res) => {
   db.paymentSettings = {
     mpesa_enabled: mpesa_enabled !== undefined ? !!mpesa_enabled : (db.paymentSettings?.mpesa_enabled ?? true),
     crypto_enabled: crypto_enabled !== undefined ? !!crypto_enabled : (db.paymentSettings?.crypto_enabled ?? true),
-    nowpayments_sandbox: nowpayments_sandbox !== undefined ? !!nowpayments_sandbox : (db.paymentSettings?.nowpayments_sandbox ?? true),
+    nowpayments_sandbox: nowpayments_sandbox !== undefined ? !!nowpayments_sandbox : (db.paymentSettings?.nowpayments_sandbox ?? false),
     nowpayments_api_key: nowpayments_api_key !== undefined ? nowpayments_api_key : (db.paymentSettings?.nowpayments_api_key || "")
   };
   

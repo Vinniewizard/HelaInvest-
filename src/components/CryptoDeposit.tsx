@@ -31,6 +31,7 @@ export default function CryptoDeposit({ onRefresh }: CryptoDepositProps) {
   const [copiedAddress, setCopiedAddress] = useState(false);
   const [copiedAmount, setCopiedAmount] = useState(false);
   const [simulatingClear, setSimulatingClear] = useState(false);
+  const [checkingStatus, setCheckingStatus] = useState(false);
 
   const handleCreateInvoice = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -117,6 +118,35 @@ export default function CryptoDeposit({ onRefresh }: CryptoDepositProps) {
       toast.error("Failed to connect with sandbox simulator.");
     } finally {
       setSimulatingClear(false);
+    }
+  };
+
+  const checkCryptoStatus = async (txId: string) => {
+    setCheckingStatus(true);
+    try {
+      const res = await fetch(`/api/transactions/${txId}/check-crypto-status`, {
+        method: "POST",
+      });
+      const data = await res.json();
+      if (res.ok) {
+        if (data.status === "approved") {
+          toast.success(data.message || "Crypto payment verified and approved!");
+          setActiveInvoice(null);
+          onRefresh();
+        } else if (data.status === "declined") {
+          toast.error(data.message || "Payment has been marked as declined.");
+          setActiveInvoice(null);
+          onRefresh();
+        } else {
+          toast.info(data.message || `Payment status check: ${data.status}`);
+        }
+      } else {
+        toast.error(data.error || "Failed to verify transaction status with server.");
+      }
+    } catch (err: any) {
+      toast.error("Failed to connect with payment verification service.");
+    } finally {
+      setCheckingStatus(false);
     }
   };
 
@@ -266,45 +296,86 @@ export default function CryptoDeposit({ onRefresh }: CryptoDepositProps) {
             </div>
           </div>
 
-          {/* Simulated Network Block Clearer */}
-          <div className="bg-slate-950 border border-[#212a3d] p-4 rounded-xl space-y-3">
-            <div className="flex justify-between items-center">
-              <span className="text-[10px] text-slate-400 font-bold block">Sandbox Simulated Blockchain Network</span>
-              <span className="text-[9px] text-[#006B4A] font-extrabold uppercase flex items-center gap-1">
-                <ShieldCheck className="h-3.5 w-3.5 text-[#006B4A]" /> Fast-Clear Active
-              </span>
+          {/* Simulated / Live Network Block Clearer */}
+          {activeInvoice.paymentId.startsWith("nw-") ? (
+            <div className="bg-slate-950 border border-[#212a3d] p-4 rounded-xl space-y-3">
+              <div className="flex justify-between items-center">
+                <span className="text-[10px] text-slate-400 font-bold block">Sandbox Simulated Blockchain Network</span>
+                <span className="text-[9px] text-[#006B4A] font-extrabold uppercase flex items-center gap-1">
+                  <ShieldCheck className="h-3.5 w-3.5 text-[#006B4A]" /> Fast-Clear Active
+                </span>
+              </div>
+              <p className="text-[10px] leading-relaxed text-slate-500 font-medium">
+                We detect you are accessing our sandbox environment. To bypass real-world digital asset mining, you can execute a simulated block clearance to settle your account ledger instantly!
+              </p>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => simulateSandboxClear(activeInvoice.txId)}
+                  disabled={simulatingClear}
+                  className="px-4 py-2 bg-indigo-600/20 hover:bg-indigo-600/35 border border-indigo-500/30 hover:border-indigo-500/50 text-indigo-300 font-bold text-xs rounded-lg cursor-pointer transition-all flex items-center justify-center gap-1.5 w-full flex-1"
+                >
+                  {simulatingClear ? (
+                    <span className="h-3.5 w-3.5 border-2 border-indigo-300 border-t-transparent rounded-full animate-spin"></span>
+                  ) : (
+                    <>
+                      <RefreshCw className="h-3.5 w-3.5 animate-spin" style={{ animationDuration: "8s" }} />
+                      Verify Payment: Settle Simulated Balance Instantly
+                    </>
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveInvoice(null);
+                    setErrorMsg(null);
+                  }}
+                  className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-350 font-bold text-xs rounded-lg cursor-pointer transition-colors"
+                >
+                  Cancel Invoice
+                </button>
+              </div>
             </div>
-            <p className="text-[10px] leading-relaxed text-slate-500 font-medium">
-              We detect you are accessing our sandbox environment. To bypass real-world digital asset mining, you can execute a simulated block clearance to settle your account ledger instantly!
-            </p>
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => simulateSandboxClear(activeInvoice.txId)}
-                disabled={simulatingClear}
-                className="px-4 py-2 bg-indigo-600/20 hover:bg-indigo-600/35 border border-indigo-500/30 hover:border-indigo-500/50 text-indigo-300 font-bold text-xs rounded-lg cursor-pointer transition-all flex items-center justify-center gap-1.5 w-full flex-1"
-              >
-                {simulatingClear ? (
-                  <span className="h-3.5 w-3.5 border-2 border-indigo-300 border-t-transparent rounded-full animate-spin"></span>
-                ) : (
-                  <>
-                    <RefreshCw className="h-3.5 w-3.5 animate-spin" style={{ animationDuration: "8s" }} />
-                    Verify Payment: Settle Simulated Balance Instantly
-                  </>
-                )}
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setActiveInvoice(null);
-                  setErrorMsg(null);
-                }}
-                className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-350 font-bold text-xs rounded-lg cursor-pointer transition-colors"
-              >
-                Cancel Invoice
-              </button>
+          ) : (
+            <div className="bg-[#0b0e14] border border-emerald-500/20 p-4 rounded-xl space-y-3">
+              <div className="flex justify-between items-center">
+                <span className="text-[10px] text-emerald-400 font-bold block uppercase tracking-wider">Live Blockchain Network Ledger</span>
+                <span className="text-[9px] text-amber-400 font-extrabold uppercase flex items-center gap-1">
+                  <span className="h-2 w-2 rounded-full bg-amber-400 animate-ping"></span> Real-time Monitoring
+                </span>
+              </div>
+              <p className="text-[10px] leading-relaxed text-slate-400 font-medium">
+                Once you have successfully executed the payment transfer on your client wallet / exchange app, click below to let your system automatically verify the transaction details and credit your account balance.
+              </p>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => checkCryptoStatus(activeInvoice.txId)}
+                  disabled={checkingStatus}
+                  className="px-4 py-2 bg-emerald-600/25 hover:bg-emerald-600/35 border border-emerald-500/40 hover:border-emerald-500/60 text-emerald-300 font-bold text-xs rounded-lg cursor-pointer transition-all flex items-center justify-center gap-1.5 w-full flex-1"
+                >
+                  {checkingStatus ? (
+                    <span className="h-3.5 w-3.5 border-2 border-emerald-300 border-t-transparent rounded-full animate-spin"></span>
+                  ) : (
+                    <>
+                      <RefreshCw className="h-3.5 w-3.5 animate-spin" style={{ animationDuration: "3s" }} />
+                      Verify Payment & Update Balance
+                    </>
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveInvoice(null);
+                    setErrorMsg(null);
+                  }}
+                  className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-350 font-bold text-xs rounded-lg cursor-pointer transition-colors"
+                >
+                  Cancel Invoice
+                </button>
+              </div>
             </div>
-          </div>
+          )}
         </div>
       )}
     </div>

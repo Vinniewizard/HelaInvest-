@@ -54,6 +54,10 @@ interface ServerTransaction {
   phone?: string;
   note?: string;
   created_at: string;
+  crypto_address?: string;
+  crypto_amount?: number;
+  crypto_currency?: string;
+  payment_id?: string;
 }
 
 interface ServerReferral {
@@ -1160,6 +1164,99 @@ app.post("/api/transactions/:id/simulate-sandbox-clear", (req, res) => {
   saveDatabase(db);
   
   res.json({ success: true, message: "Sandbox blockchain simulation completed! Your deposit was approved and cleared." });
+});
+
+// Live Check Crypto Invoice Status via NOWPayments API
+app.post("/api/transactions/:id/check-crypto-status", async (req, res) => {
+  const { id } = req.params;
+  const db = getDatabase();
+
+  const tx = db.transactions.find((t) => t.id === id);
+  if (!tx) return res.status(404).json({ error: "Transaction not found." });
+
+  if (tx.status !== "pending") {
+    return res.json({
+      success: true,
+      status: tx.status,
+      message: `Transaction is already ${tx.status}. Balance has been adjusted accordingly.`
+    });
+  }
+
+  const paymentId = tx.payment_id;
+  if (!paymentId) {
+    return res.status(400).json({ error: "No NOWPayments invoice reference associated with this transaction." });
+  }
+
+  const isSandbox = db.paymentSettings?.nowpayments_sandbox ?? true;
+
+  // If Sandbox simulated payment was created (starts with nw-)
+  if (paymentId.startsWith("nw-")) {
+    tx.status = "approved";
+    saveDatabase(db);
+    return res.json({
+      success: true,
+      status: "approved",
+      message: "🎉 Sandbox payment detected & cleared! Your simulated deposit has been approved successfully."
+    });
+  }
+
+  // Live NOWPayments Check
+  try {
+    const apiKey = db.paymentSettings?.nowpayments_api_key || process.env.NOWPAYMENTS_API_KEY;
+    if (!apiKey) {
+      return res.status(400).json({ error: "Live payment settings are incomplete. Admin API Key is missing." });
+    }
+
+    const baseUrl = isSandbox ? "https://api-sandbox.nowpayments.io/v1" : "https://api.nowpayments.io/v1";
+    console.log(`[NOWPayments Status Check] Fetching ${baseUrl}/payment/${paymentId}`);
+
+    const response = await fetch(`${baseUrl}/payment/${paymentId}`, {
+      method: "GET",
+      headers: {
+        "x-api-key": apiKey
+      }
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      console.error(`[NOWPayments Status Check Error]: HTTP ${response.status} - ${errText}`);
+      return res.status(response.status).json({
+        error: `Could not retrieve status from NOWPayments. API response: ${errText}`
+      });
+    }
+
+    const data: any = await response.json();
+    console.log("[NOWPayments Status Response]:", data);
+
+    const status = data.payment_status;
+
+    if (status === "confirmed" || status === "finished") {
+      tx.status = "approved";
+      saveDatabase(db);
+      return res.json({
+        success: true,
+        status: "approved",
+        message: "🎉 Success! NOWPayments confirmed your transfer. Your account balance has been successfully updated by the system."
+      });
+    } else if (status === "failed" || status === "expired") {
+      tx.status = "declined";
+      saveDatabase(db);
+      return res.json({
+        success: true,
+        status: "declined",
+        message: `Your payment request was marked as '${status}' by the gateway.`
+      });
+    } else {
+      return res.json({
+        success: false,
+        status: status,
+        message: `Your digital asset transfer is currently in "${status}" state. Please wait a short while for blockchain network confirmation of receipt.`
+      });
+    }
+  } catch (err: any) {
+    console.error("[NOWPayments Check Exception]:", err);
+    return res.status(500).json({ error: "Failed to connect to the external NOWPayments network: " + err.message });
+  }
 });
 
 // -------------------------------------------------------------

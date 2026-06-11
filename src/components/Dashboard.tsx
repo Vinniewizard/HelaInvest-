@@ -92,7 +92,7 @@ export default function Dashboard({ user, stats, referrals, plans, balance, onIn
           <div className="w-6 h-1 bg-[#006B4A] rounded-full absolute bottom-4 right-4"></div>
         </div>
         
-        <div className="bg-white border border-slate-200 p-4 rounded-xl shadow-sm relative overflow-hidden flex flex-col justify-between">
+        <div className="bg-white border border-slate-200 p-4 rounded-xl shadow-sm relative overflow-hidden flex flex-col justify-between col-span-2 md:col-span-1">
           <div className="text-xs font-semibold text-slate-500 mb-1">Completed profit</div>
           <div className="text-xl font-bold text-slate-800 tracking-tight">{format(stats.total_profit_earned)}</div>
           <div className="w-6 h-1 bg-[#006B4A] rounded-full absolute bottom-4 right-4"></div>

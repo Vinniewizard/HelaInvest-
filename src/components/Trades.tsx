@@ -156,11 +156,11 @@ export default function Trades({ investments, balance, onRefresh }: TradesProps)
       {/* Main page title */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex flex-col gap-1">
-          <h2 className="text-xl font-extrabold text-white tracking-tight flex items-center gap-2">
-            <ListTodo className="h-5 w-5 text-emerald-400" />
+          <h2 className="text-xl font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
+            <ListTodo className="h-5 w-5 text-[#006B4A]" />
             Active and Historical Trades
           </h2>
-          <p className="text-xs text-slate-400">
+          <p className="text-xs text-slate-500 font-medium">
             Monitor real-time progress parameters, yields, and countdowns.
           </p>
         </div>

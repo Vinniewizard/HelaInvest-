@@ -44,11 +44,11 @@ export default function Profile({ user, onRefresh }: ProfileProps) {
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-1.5">
-        <h2 className="text-xl font-extrabold text-white tracking-tight flex items-center gap-2">
-          <UserIcon className="h-5 w-5 text-indigo-400" />
-          My Profile settings
+        <h2 className="text-xl font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
+          <UserIcon className="h-5 w-5 text-[#006B4A]" />
+          My Profile Settings
         </h2>
-        <p className="text-xs text-slate-400">
+        <p className="text-xs text-slate-500 font-medium">
           Manage your personal details and account recovery options.
         </p>
       </div>
@@ -66,7 +66,7 @@ export default function Profile({ user, onRefresh }: ProfileProps) {
         </div>
       )}
 
-      <form onSubmit={handleUpdate} className="bg-[#0f131d] border border-[#212a3d] rounded-2xl p-6 lg:w-2/3 space-y-4">
+      <form onSubmit={handleUpdate} className="bg-[#0f131d] border border-[#212a3d] rounded-2xl p-6 w-full lg:max-w-2xl space-y-4 shadow-sm">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="space-y-1">
             <label className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-widest flex items-center gap-1.5 mb-2">

@@ -26,16 +26,16 @@ export default function Header({
 
   return (
     <header className="sticky top-0 z-50 w-full bg-white border-b border-slate-200 shadow-sm backdrop-blur-md">
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      <div className="max-w-6xl mx-auto px-3 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-1 sm:gap-4">
         
         {/* Brand */}
-        <div className="flex items-center gap-2">
-          <span className="text-xl font-bold tracking-tight text-[#006B4A]">
+        <div className="flex items-center gap-1 sm:gap-2 min-w-0 flex-shrink-0">
+          <span className="text-base sm:text-xl font-black tracking-tight text-[#006B4A] truncate">
             HelaVest
           </span>
           {isAdminMode && (
-            <div className="flex items-center gap-2 ml-1">
-              <span className="bg-amber-100 text-amber-700 text-[9px] uppercase font-bold px-2 py-0.5 rounded border border-amber-200">
+            <div className="flex items-center gap-1 flex-shrink-0">
+              <span className="bg-amber-100 text-[#d97706] text-[8px] uppercase font-bold px-1.5 py-0.5 rounded border border-amber-200">
                 Admin
               </span>
               <button
@@ -43,36 +43,37 @@ export default function Header({
                   setIsAdminMode(false);
                   setCurrentTab("dashboard");
                 }}
-                className="bg-slate-100 hover:bg-slate-200 text-slate-705 text-[10px] font-bold px-2.5 py-1 rounded-xl border border-slate-200 transition-all flex items-center gap-1 cursor-pointer"
+                className="bg-slate-100 hover:bg-slate-200 text-slate-700 text-[9px] font-black px-1.5 sm:px-2.5 py-1 rounded-lg border border-slate-200 transition-all flex items-center gap-0.5 cursor-pointer flex-shrink-0"
                 title="Exit administrative portal view"
               >
-                <ShieldCheck className="h-3 w-3 text-[#006B4A]" />
-                Exit Portal
+                <ShieldCheck className="h-2.5 w-2.5 text-[#006B4A]" />
+                <span className="hidden xs:inline">Exit</span>
               </button>
             </div>
           )}
         </div>
-
+ 
         {/* Multi-Currency Selection Controls */}
-        <div className="flex items-center gap-1.5 bg-slate-100 hover:bg-slate-200/80 px-2.5 sm:px-3 py-1.5 rounded-xl border border-slate-200 transition-colors">
-          <Globe className="h-3.5 w-3.5 text-[#006B4A]" />
+        <div className="flex items-center gap-1 bg-slate-100 hover:bg-slate-200/80 px-1.5 sm:px-3 py-1.5 rounded-xl border border-slate-200 transition-colors flex-shrink-0">
+          <Globe className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-[#006B4A]" />
           <select
             value={activeCurrency}
             onChange={(e) => setCurrency(e.target.value as CurrencyType)}
-            className="bg-transparent text-xs font-bold text-slate-700 focus:outline-none cursor-pointer pr-1"
+            className="bg-transparent text-[10px] sm:text-xs font-bold text-slate-700 focus:outline-none cursor-pointer pr-1"
           >
-            <option value="USD">🇺🇸 USD ($)</option>
-            <option value="KES">🇰🇪 KES (KSh)</option>
-            <option value="EUR">🇪🇺 EUR (€)</option>
-            <option value="GBP">🇬🇧 GBP (£)</option>
+            <option value="USD">USD ($)</option>
+            <option value="KES">KES (KSh)</option>
+            <option value="EUR">EUR (€)</option>
+            <option value="GBP">GBP (£)</option>
           </select>
         </div>
-
+ 
         {/* Desktop nav links */}
-        <div className="hidden sm:flex items-center justify-end gap-6 font-semibold">
+        <div className="hidden sm:flex items-center justify-end gap-6 font-semibold flex-shrink-0">
            {balance !== null && (
-             <div className="flex items-center gap-1.5 bg-[#f0f9f6] text-[#006B4A] border border-[#d2edd5] px-3 py-1.5 rounded-full text-xs font-bold shadow-sm">
-               <span className="text-slate-400 font-semibold uppercase text-[9px] tracking-wider">A/C Bal:</span>
+             <div className="flex items-center gap-1.5 bg-[#f0f9f6] text-[#006B4A] border border-[#d2edd5] px-3 py-1.5 rounded-full text-xs font-bold shadow-xs transition-transform hover:scale-102">
+               <Coins className="h-3.5 w-3.5 text-[#006B4A] animate-pulse" />
+               <span className="text-slate-500 font-semibold uppercase text-[9px] tracking-wider hidden md:inline">A/C Bal:</span>
                <span className="text-xs font-extrabold">{format(balance.available_balance)}</span>
              </div>
            )}
@@ -81,26 +82,27 @@ export default function Header({
                setIsAdminMode(false);
                setCurrentTab("dashboard");
              }}
-             className={`text-sm cursor-pointer transition-colors ${!isAdminMode && currentTab === "dashboard" ? "text-[#006B4A]" : "text-slate-600 hover:text-slate-900"}`}
+             className={`text-sm cursor-pointer transition-colors font-bold ${!isAdminMode && currentTab === "dashboard" ? "text-[#006B4A]" : "text-slate-600 hover:text-slate-900"}`}
            >
              Dashboard
            </button>
-           <button onClick={onLogout} className="text-sm text-slate-600 hover:text-red-600 transition-colors cursor-pointer">Logout</button>
+           <button onClick={onLogout} className="text-sm font-bold text-slate-600 hover:text-red-600 transition-colors cursor-pointer">Logout</button>
         </div>
         
         {/* Mobile Nav Actions */}
-        <div className="sm:hidden flex items-center gap-2">
+        <div className="sm:hidden flex items-center gap-1.5 flex-shrink-0">
            {balance !== null && (
-             <span className="text-[10px] font-black text-[#006B4A] bg-[#f0f9f6] px-2 py-1 rounded-lg border border-[#d2edd5]">
+             <span className="flex items-center gap-1 text-[10px] font-black text-[#006B4A] bg-[#f0f9f6] px-2 py-1 rounded-lg border border-[#d2edd5]">
+               <Coins className="h-3 w-3 text-[#006B4A]" />
                {format(balance.available_balance)}
              </span>
            )}
            <button
              onClick={onLogout}
              title="Log Out"
-             className="p-2 text-slate-500 hover:bg-red-50 hover:text-red-500 rounded-lg transition-colors cursor-pointer"
+             className="p-1.5 text-slate-500 hover:bg-red-50 hover:text-red-500 rounded-lg transition-colors cursor-pointer flex-shrink-0"
            >
-             <LogOut className="h-5 w-5" />
+             <LogOut className="h-4.5 w-4.5" />
            </button>
         </div>
       </div>
@@ -108,25 +110,28 @@ export default function Header({
       {/* Navigation sub-header for inner pages (unless Admin Mode) */}
       {!isAdminMode && (
         <div className="w-full bg-[#f8faf9] border-b border-slate-200 overflow-x-auto hide-scrollbar">
-          <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-2 flex items-center gap-1 sm:gap-2">
+          <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-2.5 flex items-center justify-start md:justify-center gap-1.5 sm:gap-3">
             {[
-              { id: "dashboard", label: "Terminal", icon: null },
-              { id: "wallet", label: "Account", icon: null },
-              { id: "referrals", label: "Network", icon: null },
-              { id: "trades", label: "History", icon: null },
+              { id: "dashboard", label: "Terminal", icon: TrendingUp },
+              { id: "wallet", label: "Account", icon: Wallet },
+              { id: "referrals", label: "Network", icon: Users },
+              { id: "trades", label: "History", icon: ListTodo },
+              { id: "profile", label: "Profile", icon: User },
             ].map((tab) => {
               const isActive = currentTab === tab.id;
+              const TabIcon = tab.icon;
               return (
                 <button
                   key={tab.id}
                   onClick={() => setCurrentTab(tab.id)}
-                  className={`px-4 sm:px-6 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all whitespace-nowrap cursor-pointer ${
+                  className={`px-3 md:px-5 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all whitespace-nowrap cursor-pointer flex items-center gap-2 ${
                     isActive
-                      ? "bg-white text-[#006B4A] shadow-sm border border-slate-200"
-                      : "text-slate-500 hover:text-slate-800 hover:bg-slate-100/80"
+                      ? "bg-white text-[#006B4A] shadow-xs border border-slate-200"
+                      : "text-slate-500 hover:text-slate-850 hover:bg-slate-100/60"
                   }`}
                 >
-                  {tab.label}
+                  <TabIcon className={`h-3.5 w-3.5 ${isActive ? "text-[#006B4A]" : "text-slate-400"}`} />
+                  <span>{tab.label}</span>
                 </button>
               );
             })}
@@ -137,9 +142,10 @@ export default function Header({
                   setIsAdminMode(true);
                   setCurrentTab("admin");
                 }}
-                className={`px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all whitespace-nowrap cursor-pointer text-amber-600 hover:bg-amber-50 ml-auto`}
+                className={`px-3 py-2 rounded-xl text-xs sm:text-sm font-black transition-all whitespace-nowrap cursor-pointer text-amber-600 hover:bg-amber-100/60 border border-amber-200/50 hover:border-amber-300 ml-auto md:ml-4 flex items-center gap-1.5`}
               >
-                Go to Admin
+                <ShieldCheck className="h-3.5 w-3.5 text-[#d97706]" />
+                <span>Go to Admin</span>
               </button>
             )}
           </div>

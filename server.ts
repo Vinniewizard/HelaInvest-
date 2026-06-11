@@ -3,6 +3,9 @@ import path from "path";
 import fs from "fs";
 import { createServer as createViteServer } from "vite";
 import crypto from "crypto";
+import pg from "pg";
+
+const { Pool } = pg;
 
 const app = express();
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
@@ -174,7 +177,94 @@ const DEFAULT_INVESTMENTS: ServerInvestment[] = [
   }
 ];
 
+// NEON DATABASE BACKEND MODULE
+let neonPool: any = null;
+let useNeon = false;
+let neonError: string | null = null;
+let neonInMemoryCache: DatabaseSchema | null = null;
+
+async function initNeonDatabase() {
+  const dbUrl = process.env.DATABASE_URL || process.env.NEON_DATABASE_URL;
+  if (!dbUrl) {
+    console.log("[DATABASE] No DATABASE_URL or NEON_DATABASE_URL environment variable detected. Defaulting to local JSON storage of server_db.json.");
+    return;
+  }
+
+  try {
+    console.log("[DATABASE] Neon connection string detected. Attempting pool connection...");
+    neonPool = new Pool({
+      connectionString: dbUrl,
+      ssl: {
+        rejectUnauthorized: false
+      },
+      connectionTimeoutMillis: 5000 // fail fast if wrong URL to prevent hanging
+    });
+
+    // Test query & create table
+    const client = await neonPool.connect();
+    try {
+      console.log("[DATABASE] Neon database connected. Running table checks...");
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS hela_database_state (
+          id VARCHAR(50) PRIMARY KEY,
+          data JSONB NOT NULL,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+      `);
+
+      // Load initial state
+      const res = await client.query("SELECT data FROM hela_database_state WHERE id = 'production_root'");
+      if (res.rows.length > 0) {
+        console.log("[DATABASE] Existing production_root state fetched from Neon Postgres successfully.");
+        neonInMemoryCache = res.rows[0].data;
+      } else {
+        console.log("[DATABASE] No production_root found. Seeding local dataset to Neon Postgres...");
+        
+        let initialData: DatabaseSchema;
+        if (fs.existsSync(DB_FILE)) {
+          const raw = fs.readFileSync(DB_FILE, "utf-8");
+          initialData = JSON.parse(raw);
+        } else {
+          initialData = {
+            users: DEFAULT_USERS,
+            plans: DEFAULT_PLANS,
+            investments: DEFAULT_INVESTMENTS,
+            transactions: DEFAULT_TRANSACTIONS,
+            referrals: [],
+            systemOffsetDays: 0,
+            paymentSettings: {
+              mpesa_enabled: true,
+              crypto_enabled: true,
+              nowpayments_sandbox: false,
+              nowpayments_api_key: ""
+            }
+          };
+        }
+        
+        await client.query(
+          "INSERT INTO hela_database_state (id, data) VALUES ('production_root', $1) ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data",
+          [JSON.stringify(initialData)]
+        );
+        neonInMemoryCache = initialData;
+        console.log("[DATABASE] Seeding finished. Neon Postgres is fully updated.");
+      }
+      useNeon = true;
+      neonError = null;
+    } finally {
+      client.release();
+    }
+  } catch (err: any) {
+    console.error("[DATABASE] Failed to initialize Neon PostgreSQL database pool, falling back to local storage.", err);
+    neonError = err.message || "Failed to establish secure postgres pool connection.";
+    useNeon = false;
+  }
+}
+
 function getDatabase(): DatabaseSchema {
+  if (useNeon && neonInMemoryCache) {
+    return neonInMemoryCache;
+  }
+
   if (!fs.existsSync(DB_FILE)) {
     const freshDb: DatabaseSchema = {
       users: DEFAULT_USERS,
@@ -260,6 +350,21 @@ function getDatabase(): DatabaseSchema {
 }
 
 function saveDatabase(db: DatabaseSchema) {
+  if (useNeon && neonPool) {
+    // Instantly sync local fast cache
+    neonInMemoryCache = db;
+
+    // Async push to Neon PostgreSQL in bg
+    neonPool.query(
+      "UPDATE hela_database_state SET data = $1, updated_at = CURRENT_TIMESTAMP WHERE id = 'production_root'",
+      [JSON.stringify(db)]
+    ).then(() => {
+      console.log("[DATABASE] Auto-sync to Neon cloud Postgres committed successfully.");
+    }).catch((err: any) => {
+      console.error("[DATABASE] Error committing state sync to Neon Postgres:", err);
+    });
+  }
+  
   fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2), "utf-8");
 }
 
@@ -1279,6 +1384,35 @@ app.get("/api/admin/payment-settings", (req, res) => {
   res.json({ paymentSettings: db.paymentSettings });
 });
 
+app.get("/api/admin/neon/status", (req, res) => {
+  const db = getDatabase();
+  const user = getAuthenticatedUser(req, db);
+  if (!user || !user.isAdmin) {
+    return res.status(403).json({ error: "Forbidden: Admin access only." });
+  }
+
+  const rawUrl = process.env.DATABASE_URL || process.env.NEON_DATABASE_URL || "";
+  let maskedString = "No Neon DATABASE_URL variable set in server environment";
+  
+  if (rawUrl) {
+    try {
+      const parsed = new URL(rawUrl);
+      parsed.password = "••••••••";
+      maskedString = parsed.toString();
+    } catch (e) {
+      maskedString = "postgresql://*****@ep-xxxx.us-east-1.aws.neon.tech/neondb";
+    }
+  }
+
+  res.json({
+    useNeon,
+    maskedUrl: maskedString,
+    error: neonError,
+    activeProvider: useNeon ? "Neon Serverless Postgres (Cloud)" : "Local JSON Storage (server_db.json)",
+    hasEnv: !!rawUrl
+  });
+});
+
 app.post("/api/admin/payment-settings", (req, res) => {
   const db = getDatabase();
   const user = getAuthenticatedUser(req, db);
@@ -1766,6 +1900,9 @@ app.post("/api/admin/transactions/create", (req, res) => {
 // VITE DEV SERVER & PRODUCTION ROUTING PIPELINE
 // -------------------------------------------------------------
 async function startServer() {
+  // Initialize Neon database support if connection string is configured
+  await initNeonDatabase();
+
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
       server: { middlewareMode: true },

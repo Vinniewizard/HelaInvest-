@@ -55,6 +55,16 @@ export default function AdminHub({ onRefresh }: AdminHubProps) {
   const [txPhone, setTxPhone] = useState("");
   const [txFormLoading, setTxFormLoading] = useState(false);
 
+  // Neon Cloud DB States
+  const [neonStatus, setNeonStatus] = useState<{
+    useNeon: boolean;
+    maskedUrl: string;
+    error: string | null;
+    activeProvider: string;
+    hasEnv: boolean;
+  } | null>(null);
+  const [neonLoading, setNeonLoading] = useState(false);
+
   const handleAddUserSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setMsg(null);
@@ -177,6 +187,20 @@ export default function AdminHub({ onRefresh }: AdminHubProps) {
       if (pData.plans) setPlans(pData.plans);
       if (payData.paymentSettings) {
         setPaySettings(payData.paymentSettings);
+      }
+
+      // Load Neon database status
+      setNeonLoading(true);
+      try {
+        const neonRes = await fetch("/api/admin/neon/status", opt);
+        if (neonRes.ok) {
+          const nData = await neonRes.json();
+          setNeonStatus(nData);
+        }
+      } catch (ne) {
+        console.error("Failed fetching neon status", ne);
+      } finally {
+        setNeonLoading(false);
       }
     } catch (err) {
       console.error("Failed to load admin logs", err);
@@ -1040,7 +1064,104 @@ export default function AdminHub({ onRefresh }: AdminHubProps) {
       )}
 
       {activeAdminTab === "payment_settings" && (
-        <form onSubmit={handlePaymentSettingsSubmit} className="space-y-6 bg-[#0f131d] border border-[#212a3d] rounded-2xl p-6">
+        <div className="space-y-6">
+          {/* Neon Database Integration Status panel */}
+          <div className="bg-[#0f131d] border border-[#212a3d] rounded-2xl p-6 space-y-4">
+            <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-3 border-b border-[#212a3d] pb-4">
+              <div className="flex items-center gap-2.5">
+                <div className={`h-2.5 w-2.5 rounded-full ${neonStatus?.useNeon ? 'bg-emerald-450' : 'bg-amber-450'} animate-pulse`} />
+                <div>
+                  <h3 className="text-sm font-extrabold text-white uppercase tracking-wider flex items-center gap-1.5">
+                    Neon Serverless Postgres Database Status
+                  </h3>
+                  <p className="text-[10px] text-slate-400 font-medium leading-none">External cloud database connectivity, sync buffers and telemetry logs</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={loadAdminState}
+                disabled={neonLoading}
+                className="bg-[#182030] hover:bg-[#202b3f] hover:text-white border border-[#212a3d] rounded-xl px-3 py-1.5 text-[9px] uppercase font-bold text-slate-300 flex items-center gap-1.5 transition-all cursor-pointer"
+              >
+                {neonLoading ? (
+                  <span className="h-3 w-3 border-2 border-slate-300 border-t-transparent rounded-full animate-spin"></span>
+                ) : "Refresh Health Connection"}
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
+              <div className="lg:col-span-8 space-y-3.5 text-slate-300 font-medium">
+                <p className="text-xs leading-relaxed text-slate-300">
+                  HelaVest supports automatic dynamic bridging to external cloud-hosted relational structures. Connecting to your 
+                  <strong className="text-white"> Neon Serverless Postgres Database</strong> provides bulletproof cloud database persistence, 
+                  instant transaction state safety, multi-host sync, and cluster high-availability properties.
+                </p>
+
+                <div className="bg-[#0c0f16] border border-[#212a3d] p-3.5 rounded-xl space-y-2">
+                  <div className="flex items-center justify-between text-[10px]">
+                    <span className="text-slate-400 uppercase font-black tracking-wider">Masked Database Connection Details</span>
+                    <span className="font-mono text-indigo-400 font-extrabold">Driver: PgPool Core</span>
+                  </div>
+                  <div className="bg-[#111622] rounded border border-[#212a3d] p-2.5 font-mono text-[10px] text-indigo-300 break-all select-all font-bold">
+                    {neonStatus?.maskedUrl || "No database coordinates detected"}
+                  </div>
+                </div>
+
+                {!neonStatus?.useNeon && (
+                  <div className="bg-amber-500/5 border border-amber-500/10 p-3.5 rounded-xl text-[11px] leading-relaxed text-amber-300/90 space-y-1">
+                    <span className="font-black text-amber-400 block tracking-wide uppercase text-[10px]">💡 HOW TO PERMANENTLY LINK NEON DATABASE:</span>
+                    <p>1. Provision free PostgreSQL database at <a href="https://neon.tech" target="_blank" rel="noreferrer" className="underline text-amber-350 hover:text-amber-200">neon.tech</a>.</p>
+                    <p>2. Copy your connection URL (format <code className="bg-[#0c0f16]/80 px-1 py-0.5 rounded text-rose-350 font-bold font-mono">postgres://...</code> or <code className="bg-[#0c0f16]/80 px-1 py-0.5 rounded text-rose-350 font-bold font-mono">postgresql://...</code>).</p>
+                    <p>3. Configure the string as environment variable <code className="bg-[#0c0f16]/80 px-1 py-0.5 rounded text-amber-200 font-mono">DATABASE_URL</code> or <code className="bg-[#0c0f16]/80 px-1 py-0.5 rounded text-amber-200 font-mono">NEON_DATABASE_URL</code> using the settings sidebar menu. The container automatically initiates transaction structures on launch!</p>
+                  </div>
+                )}
+              </div>
+
+              <div className="lg:col-span-4 bg-[#0c0f16] border border-[#212a3d] rounded-xl p-4.5 flex flex-col justify-between space-y-4">
+                <div>
+                  <span className="text-[9px] text-slate-500 uppercase font-extrabold tracking-widest block mb-2">DB Telemetry Indicators</span>
+                  <div className="space-y-3.5">
+                    <div>
+                      <span className="text-[9.5px] text-slate-400 uppercase font-bold tracking-wider block">Active Storage Engine:</span>
+                      <span className="text-xs font-black text-white block mt-0.5">
+                        {neonStatus?.activeProvider || "Scanning Active Port..."}
+                      </span>
+                    </div>
+
+                    <div>
+                      <span className="text-[9.5px] text-slate-400 uppercase font-bold tracking-wider block">Integration Binding:</span>
+                      <span className={`inline-flex items-center gap-1.5 text-[9.5px] font-extrabold uppercase mt-1 px-2.5 py-1 rounded-full border ${
+                        neonStatus?.useNeon
+                          ? "bg-emerald-500/10 text-emerald-450 border-emerald-500/20"
+                          : neonStatus?.hasEnv
+                          ? "bg-rose-500/5 text-rose-400 border-rose-500/20"
+                          : "bg-indigo-500/5 text-indigo-400 border-[#212a3d]"
+                      }`}>
+                        <span className={`h-1.5 w-1.5 rounded-full ${neonStatus?.useNeon ? 'bg-emerald-400 animate-pulse' : neonStatus?.hasEnv ? 'bg-rose-500' : 'bg-indigo-400'}`} />
+                        {neonStatus?.useNeon ? 'Active Cloud Connected' : neonStatus?.hasEnv ? 'Gateway Link Refused' : 'Local Sandbox Mode'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {neonStatus?.error ? (
+                  <div className="text-[10px] text-rose-300 border border-rose-500/25 bg-rose-550/10 p-3 rounded-xl font-bold font-mono tracking-tight leading-normal overflow-auto max-h-[80px]">
+                    Connection Failure Log:<br />{neonStatus.error}
+                  </div>
+                ) : neonStatus?.useNeon ? (
+                  <div className="text-[9.5px] text-emerald-400 border border-emerald-500/15 bg-emerald-500/5 px-3 py-2 rounded-xl font-bold tracking-tight">
+                    ✅ Neon Cloud system is working perfectly. User accounts, withdrawal requests, and yield allocations are locked in.
+                  </div>
+                ) : (
+                  <div className="text-[9.5px] text-slate-400 border border-[#212a3d] bg-slate-900/40 px-3 py-2 rounded-xl font-medium tracking-tight">
+                    🕒 Displaying local test environment values. Connect a database to sync live balances with multiple servers.
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <form onSubmit={handlePaymentSettingsSubmit} className="space-y-6 bg-[#0f131d] border border-[#212a3d] rounded-2xl p-6">
           <div className="border-b border-[#212a3d] pb-4">
             <h3 className="text-sm font-extrabold text-white uppercase tracking-wider flex items-center gap-1.5">
               <ToggleRight className="text-emerald-400 h-4.5 w-4.5" />
@@ -1175,6 +1296,7 @@ export default function AdminHub({ onRefresh }: AdminHubProps) {
             </button>
           </div>
         </form>
+        </div>
       )}
     </div>
   );

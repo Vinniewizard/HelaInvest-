@@ -155,6 +155,12 @@ export default function AdminHub({ onRefresh }: AdminHubProps) {
     nowpayments_sandbox: true,
     nowpayments_api_key: "",
   });
+  const [envDetected, setEnvDetected] = useState({
+    nowpayments_api_key_set: false,
+    nowpayments_base_url: "https://api.nowpayments.io/v1",
+    nowpayments_base_url_set: false,
+    ipn_callback_url: "",
+  });
   const [paySettingsLoading, setPaySettingsLoading] = useState(false);
 
   const loadAdminState = async () => {
@@ -187,6 +193,9 @@ export default function AdminHub({ onRefresh }: AdminHubProps) {
       if (pData.plans) setPlans(pData.plans);
       if (payData.paymentSettings) {
         setPaySettings(payData.paymentSettings);
+      }
+      if (payData.envDetected) {
+        setEnvDetected(payData.envDetected);
       }
 
       // Load Neon database status
@@ -421,6 +430,12 @@ export default function AdminHub({ onRefresh }: AdminHubProps) {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
+      if (data.paymentSettings) {
+        setPaySettings(data.paymentSettings);
+      }
+      if (data.envDetected) {
+        setEnvDetected(data.envDetected);
+      }
       setMsg({ type: "success", text: "Global Payment configs updated and applied instantly to cashier ledger!" });
     } catch (err: any) {
       setMsg({ type: "error", text: err.message || "Failed to save gateway config settings." });
@@ -1274,6 +1289,40 @@ export default function AdminHub({ onRefresh }: AdminHubProps) {
                     </>
                   )}
                 </button>
+              </div>
+
+              {/* Render & Environment Status Card */}
+              <div className="bg-[#0e121b] p-3.5 rounded-xl border border-[#212a3d] space-y-2 mt-2">
+                <div className="flex items-center gap-1.5 text-xs font-bold text-slate-200">
+                  <span className="inline-block h-2 w-2 rounded-full bg-indigo-500 animate-pulse"></span>
+                  Render Dynamic API Integration Status
+                </div>
+                <p className="text-[10px] text-slate-400 leading-tight">
+                  You can set your keys directly in your hosting provider's panel.
+                </p>
+                <div className="space-y-1.5 text-[11px] text-slate-300 pt-1 border-t border-[#212a3d]/25">
+                  <div className="flex items-center justify-between">
+                    <span>NOWPAYMENTS_API_KEY:</span>
+                    {envDetected.nowpayments_api_key_set ? (
+                      <span className="px-2 py-0.5 rounded-md bg-emerald-500/15 border border-emerald-500/20 text-[#00e599] font-bold text-[9px] uppercase">
+                        Detected in Render
+                      </span>
+                    ) : (
+                      <span className="px-2 py-0.5 rounded-md bg-rose-500/10 border border-rose-500/15 text-rose-400 font-bold text-[9px] uppercase">
+                        Not in Render Env
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span>NOWPAYMENTS_BASE_URL:</span>
+                    <span className="font-mono text-[10px] text-indigo-300">
+                      {envDetected.nowpayments_base_url_set ? "Active from Render" : "https://api.nowpayments.io/v1"}
+                    </span>
+                  </div>
+                </div>
+                <div className="text-[9.5px] text-slate-500 leading-relaxed pt-1.5 border-t border-[#212a3d]/25">
+                  💡 <strong className="text-slate-400">Where to set on Render:</strong> Live variables can be set under <span className="text-indigo-400 font-semibold font-mono">Render Dashboard &gt; Web Service &gt; Environment &gt; Environment Variables</span>. Adding them there ensures security and auto-sync!
+                </div>
               </div>
             </div>
           </div>

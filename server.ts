@@ -1484,7 +1484,15 @@ app.get("/api/admin/payment-settings", (req, res) => {
   if (!user || !user.isAdmin) {
     return res.status(403).json({ error: "Forbidden: Admin access only." });
   }
-  res.json({ paymentSettings: db.paymentSettings });
+  res.json({
+    paymentSettings: db.paymentSettings,
+    envDetected: {
+      nowpayments_api_key_set: !!process.env.NOWPAYMENTS_API_KEY,
+      nowpayments_base_url: process.env.NOWPAYMENTS_BASE_URL || "https://api.nowpayments.io/v1",
+      nowpayments_base_url_set: !!process.env.NOWPAYMENTS_BASE_URL,
+      ipn_callback_url: process.env.IPN_CALLBACK_URL || ""
+    }
+  });
 });
 
 app.get("/api/admin/neon/status", (req, res) => {
@@ -1532,7 +1540,17 @@ app.post("/api/admin/payment-settings", (req, res) => {
   };
   
   saveDatabase(db);
-  res.json({ success: true, paymentSettings: db.paymentSettings, message: "Gateway settings updated successfully." });
+  res.json({
+    success: true,
+    paymentSettings: db.paymentSettings,
+    envDetected: {
+      nowpayments_api_key_set: !!process.env.NOWPAYMENTS_API_KEY,
+      nowpayments_base_url: process.env.NOWPAYMENTS_BASE_URL || "https://api.nowpayments.io/v1",
+      nowpayments_base_url_set: !!process.env.NOWPAYMENTS_BASE_URL,
+      ipn_callback_url: process.env.IPN_CALLBACK_URL || ""
+    },
+    message: "Gateway settings updated successfully."
+  });
 });
 
 // Submit a Withdrawal

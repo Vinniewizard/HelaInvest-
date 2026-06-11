@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Coins, Sparkles, Copy, RefreshCw, Check, QrCode, ArrowDownCircle, Info, ExternalLink, ShieldCheck } from "lucide-react";
+import { Coins, Sparkles, Copy, RefreshCw, Check, QrCode, ArrowDownCircle, Info, ExternalLink, ShieldCheck, HelpCircle } from "lucide-react";
 import { useCurrency } from "../context/CurrencyContext";
 import { toast } from "sonner";
 
@@ -12,7 +12,7 @@ export default function CryptoDeposit({ onRefresh }: CryptoDepositProps) {
   
   // Form State
   const [amount, setAmount] = useState("");
-  const [cryptoCurrency, setCryptoCurrency] = useState<string>("USDTTRC20");
+  const [cryptoCurrency, setCryptoCurrency] = useState<string>("USDTTRC25");
   const [note, setNote] = useState("");
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -32,6 +32,11 @@ export default function CryptoDeposit({ onRefresh }: CryptoDepositProps) {
   const [copiedAmount, setCopiedAmount] = useState(false);
   const [simulatingClear, setSimulatingClear] = useState(false);
   const [checkingStatus, setCheckingStatus] = useState(false);
+
+  // Set default currency correct TRC20 code
+  React.useEffect(() => {
+    setCryptoCurrency("USDTTRC20");
+  }, []);
 
   const handleCreateInvoice = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -76,7 +81,7 @@ export default function CryptoDeposit({ onRefresh }: CryptoDepositProps) {
         txId: data.transaction.id,
       });
 
-      toast.success("Crypto checkout invoice generated!");
+      toast.success("Crypto checkout invoice generated successfully!");
       setAmount("");
       setNote("");
       onRefresh();
@@ -153,8 +158,8 @@ export default function CryptoDeposit({ onRefresh }: CryptoDepositProps) {
   return (
     <div className="space-y-6">
       {errorMsg && (
-        <div className="p-4 bg-red-500/10 border border-red-500/20 text-red-300 text-xs font-semibold rounded-xl flex items-center gap-2">
-          <span className="text-base">⚠️</span>
+        <div className="p-4 bg-red-50 border border-red-200 text-red-800 text-xs font-semibold rounded-xl flex items-center gap-2">
+          <span className="text-base text-red-500">⚠️</span>
           <span>{errorMsg}</span>
         </div>
       )}
@@ -163,11 +168,11 @@ export default function CryptoDeposit({ onRefresh }: CryptoDepositProps) {
         <form onSubmit={handleCreateInvoice} className="space-y-5">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-widest mb-1.5">
-                Funding Target Capital Amount ({symbol}) *
+              <label className="block text-[10px] font-extrabold text-[#006B4A] uppercase tracking-wider mb-2">
+                Capital Funding Amount ({symbol}) *
               </label>
               <div className="relative">
-                <span className="absolute left-3.5 top-3 text-xs text-slate-500 font-bold">{symbol}</span>
+                <span className="absolute left-3.5 top-3 text-sm text-slate-400 font-bold">{symbol}</span>
                 <input
                   type="number"
                   placeholder="e.g. 50"
@@ -175,35 +180,35 @@ export default function CryptoDeposit({ onRefresh }: CryptoDepositProps) {
                   min="1"
                   value={amount}
                   onChange={(e) => setAmount(e.target.value)}
-                  className="w-full bg-[#0c0f16] border border-[#212a3d] focus:border-[#006B4A]/60 rounded-xl pl-8 pr-4 py-2.5 text-xs font-bold text-slate-250 outline-none transition-colors"
+                  className="w-full bg-slate-50 border border-slate-200 focus:border-[#006B4A] rounded-xl pl-9 pr-4 py-2.5 text-xs font-bold text-slate-800 outline-none transition-all"
                 />
               </div>
               {amount && (
-                <span className="text-[10px] text-slate-400 font-mono mt-1 block">
+                <span className="text-[10px] text-slate-500 font-mono mt-1 w-full block leading-none">
                   ≈ KSh {convertToKES(Number(amount)).toLocaleString()} Base Node Value
                 </span>
               )}
             </div>
 
             <div>
-              <label className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-widest mb-1.5">
-                Select Native Cryptocoin Network *
+              <label className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mb-2">
+                Cryptocoin Network *
               </label>
               <select
                 value={cryptoCurrency}
                 onChange={(e) => setCryptoCurrency(e.target.value)}
-                className="w-full bg-[#0c0f16] border border-[#212a3d] focus:border-[#006B4A]/60 rounded-xl px-4 py-2.5 text-xs font-bold text-slate-250 outline-none cursor-pointer transition-colors"
+                className="w-full bg-slate-50 border border-slate-200 focus:border-[#006B4A] rounded-xl px-4 py-2.5 text-xs font-bold text-slate-800 outline-none cursor-pointer transition-all"
               >
-                <option value="USDTTRC20">USDT (TRC-20 Mainnet)</option>
+                <option value="USDTTRC20">USDT (TRC-20 Mainnet Node)</option>
                 <option value="BTC">BTC (Bitcoin network)</option>
                 <option value="ETH">ETH (Ethereum ERC-20)</option>
-                <option value="USDC">USDC (USD Coin Polygon/ERC20)</option>
+                <option value="USDC">USDC (USD Coin ERC20/Poly)</option>
               </select>
             </div>
           </div>
 
           <div>
-            <label className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-widest mb-1.5">
+            <label className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mb-2">
               Memo Reference Note
             </label>
             <input
@@ -211,7 +216,7 @@ export default function CryptoDeposit({ onRefresh }: CryptoDepositProps) {
               placeholder="e.g. Crypto asset top up"
               value={note}
               onChange={(e) => setNote(e.target.value)}
-              className="w-full bg-[#0c0f16] border border-[#212a3d] focus:border-[#006B4A]/60 rounded-xl px-4 py-2.5 text-xs font-medium text-slate-250 outline-none transition-colors"
+              className="w-full bg-slate-50 border border-slate-200 focus:border-[#006B4A] rounded-xl px-4 py-2.5 text-xs font-medium text-slate-800 outline-none transition-all"
             />
           </div>
 
@@ -219,7 +224,9 @@ export default function CryptoDeposit({ onRefresh }: CryptoDepositProps) {
             type="submit"
             disabled={loading || !amount}
             className={`w-full py-3 px-6 rounded-xl flex justify-center items-center gap-2 font-bold text-xs transition-transform duration-200 cursor-pointer shadow-md ${
-              !amount ? "bg-slate-800 text-slate-500 cursor-not-allowed" : "bg-[#006B4A] hover:bg-[#005238] text-white active:scale-[0.99]"
+              !amount
+                ? "bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200/50"
+                : "bg-[#006B4A] hover:bg-[#005238] text-white active:scale-[0.99]"
             }`}
           >
             {loading ? (
@@ -227,100 +234,103 @@ export default function CryptoDeposit({ onRefresh }: CryptoDepositProps) {
             ) : (
               <>
                 <Coins className="h-4.5 w-4.5 text-amber-400" />
-                Initialize Crypto Invoice Funding Route
+                Initialize Crypto Invoice Gateway
               </>
             )}
           </button>
         </form>
       ) : (
-        <div className="bg-[#0c0f16]/90 border border-indigo-500/20 p-6 rounded-2xl space-y-6">
-          <div className="flex justify-between items-start border-b border-[#212a3d] pb-4">
+        <div className="bg-white border border-slate-200 p-6 rounded-2xl shadow-sm space-y-6">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-slate-100 pb-4 gap-3">
             <div>
-              <span className="text-xs font-bold text-indigo-400 block uppercase tracking-wider">Checkout Payment Details</span>
-              <span className="text-[10px] text-slate-500 font-mono">Invoice ID: {activeInvoice.paymentId}</span>
+              <span className="text-xs font-bold text-indigo-700 block uppercase tracking-wider">NOWPayments Secure Invoice</span>
+              <span className="text-[10px] text-slate-500 font-mono">ID: {activeInvoice.paymentId}</span>
             </div>
-            <span className="bg-amber-500/10 text-amber-400 border border-amber-500/20 px-2 py-0.5 rounded text-[9px] uppercase font-bold animate-pulse">
-              Waiting for Crypto Payer Transfer
+            <span className="bg-amber-100 text-amber-800 border border-amber-200 px-2.5 py-0.5 rounded-full text-[9px] uppercase font-extrabold tracking-wide inline-flex items-center gap-1 animate-pulse">
+              <span className="h-1.5 w-1.5 rounded-full bg-amber-500"></span> Waiting for Network Transfer
             </span>
           </div>
 
           <div className="flex flex-col md:flex-row gap-6 items-center">
             {/* QR Code */}
-            <div className="bg-white p-3 rounded-xl shrink-0 border border-slate-200">
+            <div className="bg-slate-50 p-4 rounded-2xl shrink-0 border border-slate-200 flex flex-col items-center justify-center shadow-inner">
               <img
                 src={`https://api.qrserver.com/v1/create-qr-code/?size=140x140&data=${encodeURIComponent(activeInvoice.payAddress)}`}
-                alt="Payment QR target Address"
+                alt="Payment QR Address"
                 referrerPolicy="no-referrer"
-                className="h-32 w-32"
+                className="h-32 w-32 rounded-lg"
               />
+              <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider mt-2.5 flex items-center gap-1">
+                <QrCode className="h-3 w-3" /> Scan with Wallet App
+              </span>
             </div>
 
             {/* Transfer credentials info */}
             <div className="space-y-4 w-full">
               {/* Transfer amount */}
-              <div>
-                <span className="block text-[9px] text-slate-400 uppercase font-extrabold tracking-wider">Required Transfer Amount</span>
-                <div className="flex items-center gap-2 mt-1">
-                  <span className="text-lg font-mono font-black text-white">
+              <div className="space-y-1">
+                <span className="block text-[9.5px] text-slate-400 uppercase font-extrabold tracking-wider">Exact Transfer Required</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-xl font-mono font-black text-slate-800 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-200/60 inline-block">
                     {activeInvoice.payAmount} {activeInvoice.cryptoCurrency}
                   </span>
                   <button
                     onClick={() => copyToClipboard(String(activeInvoice.payAmount), "amount")}
-                    className="p-1 hover:bg-slate-800 rounded text-slate-400 hover:text-white transition-colors cursor-pointer"
+                    className="p-2 py-2.5 hover:bg-slate-100 rounded-xl border border-slate-200 text-slate-500 hover:text-slate-800 transition-all cursor-pointer flex items-center"
                     title="Copy transfer amount"
                   >
-                    {copiedAmount ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
+                    {copiedAmount ? <Check className="h-3.5 w-3.5 text-[#006B4A]" /> : <Copy className="h-3.5 w-3.5" />}
                   </button>
                 </div>
-                <span className="text-[10px] text-slate-400 font-medium italic block mt-0.5">
-                  (Estimated conversion ≈ ${activeInvoice.priceAmountUSD} USD net ledger value)
+                <span className="text-[10px] text-slate-400 font-medium italic block">
+                  (Estimated net ledger value ≈ ${activeInvoice.priceAmountUSD} USD)
                 </span>
               </div>
 
               {/* Target wallet address */}
-              <div>
-                <span className="block text-[9px] text-slate-500 uppercase font-extrabold tracking-wider">Recipient Smart Wallet Address</span>
-                <div className="flex items-center gap-2 mt-1 bg-slate-900 border border-[#212a3d] p-2.5 rounded-xl">
-                  <span className="text-[10.5px] font-mono text-emerald-400 break-all select-all font-bold">
+              <div className="space-y-1">
+                <span className="block text-[9.5px] text-slate-400 uppercase font-extrabold tracking-wider">Smart Payout Wallet Address Coordinates</span>
+                <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 p-2.5 rounded-xl">
+                  <span className="text-[10.5px] font-mono text-indigo-700 break-all select-all font-bold">
                     {activeInvoice.payAddress}
                   </span>
                   <button
                     onClick={() => copyToClipboard(activeInvoice.payAddress, "address")}
-                    className="p-1.5 hover:bg-slate-800 rounded text-slate-400 hover:text-white shrink-0 transition-colors cursor-pointer"
+                    className="p-1.5 hover:bg-slate-200 rounded text-slate-500 hover:text-indigo-900 shrink-0 transition-all cursor-pointer"
                     title="Copy smart wallet destination address"
                   >
-                    {copiedAddress ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
+                    {copiedAddress ? <Check className="h-3.5 w-3.5 text-[#006B4A]" /> : <Copy className="h-3.5 w-3.5" />}
                   </button>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Simulated / Live Network Block Clearer */}
+          {/* Sandbox check and Live verification tools */}
           {activeInvoice.paymentId.startsWith("nw-") ? (
-            <div className="bg-slate-950 border border-[#212a3d] p-4 rounded-xl space-y-3">
+            <div className="bg-indigo-50 border border-indigo-200 p-5 rounded-xl space-y-3.5 leading-normal">
               <div className="flex justify-between items-center">
-                <span className="text-[10px] text-slate-400 font-bold block">Sandbox Simulated Blockchain Network</span>
-                <span className="text-[9px] text-[#006B4A] font-extrabold uppercase flex items-center gap-1">
-                  <ShieldCheck className="h-3.5 w-3.5 text-[#006B4A]" /> Fast-Clear Active
+                <span className="text-[10px] text-indigo-800 font-extrabold block uppercase tracking-wider">Sandbox Fast-Clear Terminal</span>
+                <span className="text-[9px] bg-indigo-100 border border-indigo-200 text-indigo-800 px-2.5 py-0.5 rounded-full font-bold uppercase flex items-center gap-1">
+                  <ShieldCheck className="h-3.5 w-3.5 text-[#006B4A]" /> Bypass Settle Mode
                 </span>
               </div>
-              <p className="text-[10px] leading-relaxed text-slate-500 font-medium">
-                We detect you are accessing our sandbox environment. To bypass real-world digital asset mining, you can execute a simulated block clearance to settle your account ledger instantly!
+              <p className="text-[10.5px] text-indigo-950 font-medium leading-relaxed">
+                You are accessing our verified sandbox environment. Bypass real-world digital asset mining times to instantly credit your simulation account!
               </p>
-              <div className="flex gap-2">
+              <div className="flex flex-col sm:flex-row gap-2 pt-1">
                 <button
                   type="button"
                   onClick={() => simulateSandboxClear(activeInvoice.txId)}
                   disabled={simulatingClear}
-                  className="px-4 py-2 bg-indigo-600/20 hover:bg-indigo-600/35 border border-indigo-500/30 hover:border-indigo-500/50 text-indigo-300 font-bold text-xs rounded-lg cursor-pointer transition-all flex items-center justify-center gap-1.5 w-full flex-1"
+                  className="px-4 py-2.5 bg-[#006B4A] hover:bg-[#005238] text-white font-bold text-xs rounded-lg cursor-pointer transition-all flex items-center justify-center gap-1.5 flex-1"
                 >
                   {simulatingClear ? (
-                    <span className="h-3.5 w-3.5 border-2 border-indigo-300 border-t-transparent rounded-full animate-spin"></span>
+                    <span className="h-3.5 w-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
                   ) : (
                     <>
                       <RefreshCw className="h-3.5 w-3.5 animate-spin" style={{ animationDuration: "8s" }} />
-                      Verify Payment: Settle Simulated Balance Instantly
+                      Instant Sandbox Clearance Setup
                     </>
                   )}
                 </button>
@@ -330,36 +340,36 @@ export default function CryptoDeposit({ onRefresh }: CryptoDepositProps) {
                     setActiveInvoice(null);
                     setErrorMsg(null);
                   }}
-                  className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-350 font-bold text-xs rounded-lg cursor-pointer transition-colors"
+                  className="px-4 py-2.5 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-bold text-xs rounded-lg cursor-pointer transition-all flex items-center justify-center"
                 >
                   Cancel Invoice
                 </button>
               </div>
             </div>
           ) : (
-            <div className="bg-[#0b0e14] border border-emerald-500/20 p-4 rounded-xl space-y-3">
+            <div className="bg-emerald-50 border border-emerald-200 p-5 rounded-xl space-y-3.5 leading-normal">
               <div className="flex justify-between items-center">
-                <span className="text-[10px] text-emerald-400 font-bold block uppercase tracking-wider">Live Blockchain Network Ledger</span>
-                <span className="text-[9px] text-amber-400 font-extrabold uppercase flex items-center gap-1">
-                  <span className="h-2 w-2 rounded-full bg-amber-400 animate-ping"></span> Real-time Monitoring
+                <span className="text-[10px] text-emerald-800 font-bold block uppercase tracking-wider">Live Blockchain Network Verification</span>
+                <span className="text-[9px] text-[#006B4A] font-extrabold uppercase flex items-center gap-1.5">
+                  <span className="h-2 w-2 rounded-full bg-[#006B4A] animate-ping"></span> Real-Time Monitor
                 </span>
               </div>
-              <p className="text-[10px] leading-relaxed text-slate-400 font-medium">
-                Once you have successfully executed the payment transfer on your client wallet / exchange app, click below to let your system automatically verify the transaction details and credit your account balance.
+              <p className="text-[10.5px] leading-relaxed text-emerald-950 font-medium">
+                Once successfully authorized on your cryptocurrency exchange/wallet portfolio, trigger live audit validation below to sync state immediately.
               </p>
-              <div className="flex gap-2">
+              <div className="flex flex-col sm:flex-row gap-2 pt-1">
                 <button
                   type="button"
                   onClick={() => checkCryptoStatus(activeInvoice.txId)}
                   disabled={checkingStatus}
-                  className="px-4 py-2 bg-emerald-600/25 hover:bg-emerald-600/35 border border-emerald-500/40 hover:border-emerald-500/60 text-emerald-300 font-bold text-xs rounded-lg cursor-pointer transition-all flex items-center justify-center gap-1.5 w-full flex-1"
+                  className="px-4 py-2.5 bg-[#006B4A] hover:bg-[#005238] text-white font-bold text-xs rounded-lg cursor-pointer transition-all flex items-center justify-center gap-1.5 flex-1"
                 >
                   {checkingStatus ? (
-                    <span className="h-3.5 w-3.5 border-2 border-emerald-300 border-t-transparent rounded-full animate-spin"></span>
+                    <span className="h-3.5 w-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
                   ) : (
                     <>
                       <RefreshCw className="h-3.5 w-3.5 animate-spin" style={{ animationDuration: "3s" }} />
-                      Verify Payment & Update Balance
+                      Verify Network Payment Status
                     </>
                   )}
                 </button>
@@ -369,7 +379,7 @@ export default function CryptoDeposit({ onRefresh }: CryptoDepositProps) {
                     setActiveInvoice(null);
                     setErrorMsg(null);
                   }}
-                  className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-350 font-bold text-xs rounded-lg cursor-pointer transition-colors"
+                  className="px-4 py-2.5 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-bold text-xs rounded-lg cursor-pointer transition-all flex items-center justify-center"
                 >
                   Cancel Invoice
                 </button>

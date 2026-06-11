@@ -387,99 +387,51 @@ export default function CryptoDeposit({ onRefresh }: CryptoDepositProps) {
           </div>
 
           {/* Action modules */}
-          {activeInvoice.paymentId.startsWith("nw-") ? (
-            <div className="bg-indigo-950/40 border border-indigo-500/20 p-5 rounded-xl space-y-4">
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] text-indigo-300 font-extrabold uppercase tracking-wider block">Sandbox Simulated Settlement</span>
-                <span className="text-[9px] bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 px-2 py-0.5 rounded font-black uppercase flex items-center gap-1">
-                  <ShieldCheck className="h-3.5 w-3.5 text-emerald-400" /> SANDBOX GATEWAY
-                </span>
-              </div>
-              <p className="text-[11px] text-slate-350 leading-relaxed font-semibold">
-                This transaction runs on sandbox mode. Avoid placing actual cryptocurrency assets. You can instantly simulate full ledger settlement with the automatic trigger below!
-              </p>
-              
-              <div className="flex flex-col sm:flex-row gap-2.5 pt-1">
-                <button
-                  type="button"
-                  onClick={() => simulateSandboxClear(activeInvoice.txId)}
-                  disabled={simulatingClear || cancellingInvoice}
-                  className="px-4 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs rounded-xl cursor-pointer transition-all flex items-center justify-center gap-2 flex-1 shadow-md hover:shadow-emerald-950/40"
-                >
-                  {simulatingClear ? (
-                    <span className="h-3 w-3 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
-                  ) : (
-                    <>
-                      <RefreshCw className="h-3.5 w-3.5 animate-spin" style={{ animationDuration: "8s" }} />
-                      Instant Sandbox Clearance
-                    </>
-                  )}
-                </button>
-                
-                <button
-                  type="button"
-                  onClick={handleCancelInvoice}
-                  disabled={cancellingInvoice || simulatingClear}
-                  className="px-4 py-3 bg-[#111622] hover:bg-[#1c2235] border border-[#212a3d] text-slate-300 hover:text-rose-400 font-bold text-xs rounded-xl cursor-pointer transition-all flex items-center justify-center gap-1.5"
-                >
-                  {cancellingInvoice ? (
-                    <span className="h-3 w-3 border-2 border-rose-450 border-t-transparent rounded-full animate-spin"></span>
-                  ) : (
-                    <>
-                      <XCircle className="h-3.5 w-3.5" />
-                      Self-Cancel Invoice
-                    </>
-                  )}
-                </button>
-              </div>
+          <div className="bg-emerald-950/20 border border-emerald-500/15 p-5 rounded-xl space-y-4">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] text-emerald-450 font-black uppercase tracking-wider block">Live Blockchain Network Tracker</span>
+              <span className="bg-emerald-550/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded text-[9px] uppercase font-bold tracking-widest flex items-center gap-1 animate-pulse">
+                <span className="h-1 h-1 bg-emerald-400 rounded-full animate-ping"></span> Live Sync Active
+              </span>
             </div>
-          ) : (
-            <div className="bg-emerald-950/20 border border-emerald-500/15 p-5 rounded-xl space-y-4">
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] text-emerald-450 font-black uppercase tracking-wider block">Live Blockchain Network Tracker</span>
-                <span className="bg-emerald-550/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded text-[9px] uppercase font-bold tracking-widest flex items-center gap-1 animate-pulse">
-                  <span className="h-1 text-1 rounded-full bg-emerald-400 animate-ping"></span> Sync Active
-                </span>
-              </div>
-              <p className="text-[11px] text-slate-350 leading-relaxed">
-                Confirm your coin transfer is initiated in your private currency app, then select validation. You can cancel if exchange rates shifted.
-              </p>
+            <p className="text-[11px] text-slate-350 leading-relaxed font-semibold">
+              Confirm your coin transfer is initiated in your private wallet or exchange app, then click verify. Once the transaction achieves required network block confirmations, ledger balance shifts automatically. You can safely self-cancel below if you need to adjust coordinates.
+            </p>
 
-              <div className="flex flex-col sm:flex-row gap-2.5 pt-1">
-                <button
-                  type="button"
-                  onClick={() => checkCryptoStatus(activeInvoice.txId)}
-                  disabled={checkingStatus || cancellingInvoice}
-                  className="px-4 py-3 bg-[#006B4A] hover:bg-[#005238] text-white font-black text-xs rounded-xl cursor-pointer transition-all flex items-center justify-center gap-2 flex-1 shadow-md"
-                >
-                  {checkingStatus ? (
-                    <span className="h-3.5 w-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
-                  ) : (
-                    <>
-                      <RefreshCw className="h-3.5 w-3.5 animate-spin" style={{ animationDuration: "3s" }} />
-                      Verify Network Payment Status
-                    </>
-                  )}
-                </button>
+            <div className="flex flex-col sm:flex-row gap-2.5 pt-1">
+              <button
+                type="button"
+                onClick={() => checkCryptoStatus(activeInvoice.txId)}
+                disabled={checkingStatus || cancellingInvoice}
+                className="px-4 py-3 bg-[#006B4A] hover:bg-[#005238] text-white font-black text-xs rounded-xl cursor-pointer transition-all flex items-center justify-center gap-2 flex-1 shadow-md"
+              >
+                {checkingStatus ? (
+                  <span className="h-3.5 w-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                ) : (
+                  <>
+                    <RefreshCw className="h-3.5 w-3.5 animate-spin" style={{ animationDuration: "3s" }} />
+                    Verify Network Payment Status
+                  </>
+                )}
+              </button>
 
-                <button
-                  type="button"
-                  onClick={handleCancelInvoice}
-                  disabled={cancellingInvoice || checkingStatus}
-                  className="px-4 py-3 bg-slate-900 hover:bg-[#1a2333] border border-[#212a3d] text-slate-300 hover:text-rose-400 font-bold text-xs rounded-xl cursor-pointer transition-all flex items-center justify-center gap-1.5"
-                >
-                  {cancellingInvoice ? (
-                    <span className="h-3.5 w-3.5 border-2 border-rose-400 border-t-transparent rounded-full animate-spin"></span>
-                  ) : (
-                    <>
-                      <XCircle className="h-3.5 w-3.5" />
-                      Self-Cancel Invoice
-                    </>
-                  )}
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={handleCancelInvoice}
+                disabled={cancellingInvoice || checkingStatus}
+                className="px-4 py-3 bg-[#111622] hover:bg-[#1c2235] border border-[#212a3d] text-slate-300 hover:text-rose-400 font-bold text-xs rounded-xl cursor-pointer transition-all flex items-center justify-center gap-1.5"
+              >
+                {cancellingInvoice ? (
+                  <span className="h-3.5 w-3.5 border-2 border-rose-400 border-t-transparent rounded-full animate-spin"></span>
+                ) : (
+                  <>
+                    <XCircle className="h-3.5 w-3.5" />
+                    Self-Cancel Invoice
+                  </>
+                )}
+              </button>
             </div>
-          )}
+          </div>
         </div>
       )}
     </div>

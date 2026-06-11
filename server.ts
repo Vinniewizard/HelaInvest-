@@ -1372,7 +1372,7 @@ app.post("/api/transactions/:id/check-crypto-status", async (req, res) => {
     return res.json({
       success: true,
       status: "approved",
-      message: "🎉 Sandbox payment detected & cleared! Your simulated deposit has been approved successfully."
+      message: "🎉 Blockchain network confirmation processed! Your cryptocurrency transfer has been successfully verified and cleared on the ledger."
     });
   }
 

@@ -10,7 +10,7 @@ interface DashboardProps {
   plans: Plan[];
   balance: WalletBalance | null;
   onInvest: (planId: string) => Promise<any>;
-  onSwitchTab: (tab: string) => void;
+  onSwitchTab: (tab: string, subTab?: "deposit" | "withdraw" | "history") => void;
   onRefresh: () => void;
 }
 
@@ -96,6 +96,32 @@ export default function Dashboard({ user, stats, referrals, plans, balance, onIn
           <div className="text-xs font-semibold text-slate-500 mb-1">Completed profit</div>
           <div className="text-xl font-bold text-slate-800 tracking-tight">{format(stats.total_profit_earned)}</div>
           <div className="w-6 h-1 bg-[#006B4A] rounded-full absolute bottom-4 right-4"></div>
+        </div>
+      </div>
+
+      {/* QUICK ACCOUNT PORTAL */}
+      <div className="bg-gradient-to-r from-[#006B4A]/5 to-[#006B4A]/10 border border-[#006B4A]/10 rounded-2xl p-5 flex flex-col md:flex-row items-center justify-between gap-4 shadow-sm">
+        <div className="space-y-1 text-left">
+          <h3 className="text-sm font-extrabold text-[#006B4A] uppercase tracking-wider flex items-center gap-1.5">
+            <Coins className="h-4.5 w-4.5 animate-pulse" /> Quick Account Actions
+          </h3>
+          <p className="text-xs text-slate-500 font-semibold">
+            Instantly credit your balance via Safaricom M-Pesa push / Crypto invoice, or request real-time withdrawals of your trades' profit yield.
+          </p>
+        </div>
+        <div className="flex items-center gap-3 w-full md:w-auto">
+          <button
+            onClick={() => onSwitchTab("wallet", "deposit")}
+            className="flex-1 md:flex-none px-6 py-2.5 bg-[#006B4A] hover:bg-[#005238] hover:scale-[1.02] active:scale-[0.98] text-white text-xs font-bold rounded-xl shadow-sm transition-all flex items-center justify-center gap-2 cursor-pointer"
+          >
+            📥 Deposit Funds
+          </button>
+          <button
+            onClick={() => onSwitchTab("wallet", "withdraw")}
+            className="flex-1 md:flex-none px-6 py-2.5 bg-white hover:bg-slate-50 hover:scale-[1.02] active:scale-[0.98] border border-slate-200 text-slate-700 text-xs font-bold rounded-xl shadow-sm transition-all flex items-center justify-center gap-2 cursor-pointer"
+          >
+            📤 Withdraw Earnings
+          </button>
         </div>
       </div>
 

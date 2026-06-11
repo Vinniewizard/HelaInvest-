@@ -12,6 +12,8 @@ interface WalletProps {
   onDeposit: (amount: number, phone: string, note: string) => Promise<any>;
   onWithdraw: (amount: number, phone: string, note: string) => Promise<any>;
   onRefresh: () => void;
+  activeSubTab?: "deposit" | "withdraw" | "history";
+  setActiveSubTab?: (tab: "deposit" | "withdraw" | "history") => void;
 }
 
 export default function WalletComponent({
@@ -21,9 +23,14 @@ export default function WalletComponent({
   onDeposit,
   onWithdraw,
   onRefresh,
+  activeSubTab: propActiveSubTab,
+  setActiveSubTab: propSetActiveSubTab,
 }: WalletProps) {
   const { format, convertToKES, convertFromKES, symbol, activeCurrency } = useCurrency();
-  const [activeSubTab, setActiveSubTab] = useState<"deposit" | "withdraw" | "history">("deposit");
+  const [localActiveSubTab, setLocalActiveSubTab] = useState<"deposit" | "withdraw" | "history">("deposit");
+
+  const activeSubTab = propActiveSubTab ?? localActiveSubTab;
+  const setActiveSubTab = propSetActiveSubTab ?? setLocalActiveSubTab;
 
   // Gateway Settings cached dynamically
   const [paymentSettings, setPaymentSettings] = useState({

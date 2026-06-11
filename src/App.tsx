@@ -24,6 +24,7 @@ export default function App() {
   // Layout states
   const [currentTab, setCurrentTab] = useState("dashboard");
   const [isAdminMode, setIsAdminMode] = useState(false);
+  const [walletSubTab, setWalletSubTab] = useState<"deposit" | "withdraw" | "history">("deposit");
 
   // App metrics state
   const [balance, setBalance] = useState<WalletBalance | null>(null);
@@ -370,8 +371,11 @@ export default function App() {
                 plans={plans}
                 balance={balance}
                 onInvest={handleInvest}
-                onSwitchTab={(tab) => {
+                onSwitchTab={(tab, subTab) => {
                   setCurrentTab(tab);
+                  if (subTab) {
+                    setWalletSubTab(subTab);
+                  }
                   window.scrollTo({ top: 0, behavior: "smooth" });
                 }}
                 onRefresh={triggerRefresh}
@@ -390,6 +394,8 @@ export default function App() {
                 onDeposit={handleDeposit}
                 onWithdraw={handleWithdrawal}
                 onRefresh={triggerRefresh}
+                activeSubTab={walletSubTab}
+                setActiveSubTab={setWalletSubTab}
               />
             ) : currentTab === "referrals" ? (
               <Referrals

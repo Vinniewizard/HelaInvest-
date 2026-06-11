@@ -22,7 +22,7 @@ export default function Header({
   setIsAdminMode,
   onLogout,
 }: HeaderProps) {
-  const { activeCurrency, setCurrency } = useCurrency();
+  const { activeCurrency, setCurrency, format } = useCurrency();
 
   return (
     <header className="sticky top-0 z-50 w-full bg-white border-b border-slate-200 shadow-sm backdrop-blur-md">
@@ -57,17 +57,31 @@ export default function Header({
 
         {/* Desktop nav links */}
         <div className="hidden sm:flex items-center justify-end gap-6 font-semibold">
+           {balance !== null && (
+             <div className="flex items-center gap-1.5 bg-[#f0f9f6] text-[#006B4A] border border-[#d2edd5] px-3 py-1.5 rounded-full text-xs font-bold shadow-sm">
+               <span className="text-slate-400 font-semibold uppercase text-[9px] tracking-wider">A/C Bal:</span>
+               <span className="text-xs font-extrabold">{format(balance.available_balance)}</span>
+             </div>
+           )}
            <button onClick={() => setCurrentTab("dashboard")} className={`text-sm cursor-pointer transition-colors ${currentTab === "dashboard" ? "text-[#006B4A]" : "text-slate-600 hover:text-slate-900"}`}>Dashboard</button>
            <button onClick={onLogout} className="text-sm text-slate-600 hover:text-red-600 transition-colors cursor-pointer">Logout</button>
         </div>
         
-        <button
-          onClick={onLogout}
-          title="Log Out"
-          className="sm:hidden p-2 text-slate-500 hover:bg-red-50 hover:text-red-500 rounded-lg transition-colors cursor-pointer"
-        >
-          <LogOut className="h-5 w-5" />
-        </button>
+        {/* Mobile Nav Actions */}
+        <div className="sm:hidden flex items-center gap-2">
+           {balance !== null && (
+             <span className="text-[10px] font-black text-[#006B4A] bg-[#f0f9f6] px-2 py-1 rounded-lg border border-[#d2edd5]">
+               {format(balance.available_balance)}
+             </span>
+           )}
+           <button
+             onClick={onLogout}
+             title="Log Out"
+             className="p-2 text-slate-500 hover:bg-red-50 hover:text-red-500 rounded-lg transition-colors cursor-pointer"
+           >
+             <LogOut className="h-5 w-5" />
+           </button>
+        </div>
       </div>
 
       {/* Navigation sub-header for inner pages (unless Admin Mode) */}
@@ -76,7 +90,7 @@ export default function Header({
           <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-2 flex items-center gap-1 sm:gap-2">
             {[
               { id: "dashboard", label: "Terminal", icon: null },
-              { id: "wallet", label: "Cashier", icon: null },
+              { id: "wallet", label: "Account", icon: null },
               { id: "referrals", label: "Network", icon: null },
               { id: "trades", label: "History", icon: null },
             ].map((tab) => {

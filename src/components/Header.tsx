@@ -34,9 +34,22 @@ export default function Header({
             HelaVest
           </span>
           {isAdminMode && (
-            <span className="bg-amber-100 text-amber-700 text-[9px] uppercase font-bold px-2 py-0.5 rounded ml-2 border border-amber-200">
-              Admin
-            </span>
+            <div className="flex items-center gap-2 ml-1">
+              <span className="bg-amber-100 text-amber-700 text-[9px] uppercase font-bold px-2 py-0.5 rounded border border-amber-200">
+                Admin
+              </span>
+              <button
+                onClick={() => {
+                  setIsAdminMode(false);
+                  setCurrentTab("dashboard");
+                }}
+                className="bg-slate-100 hover:bg-slate-200 text-slate-705 text-[10px] font-bold px-2.5 py-1 rounded-xl border border-slate-200 transition-all flex items-center gap-1 cursor-pointer"
+                title="Exit administrative portal view"
+              >
+                <ShieldCheck className="h-3 w-3 text-[#006B4A]" />
+                Exit Portal
+              </button>
+            </div>
           )}
         </div>
 
@@ -63,7 +76,15 @@ export default function Header({
                <span className="text-xs font-extrabold">{format(balance.available_balance)}</span>
              </div>
            )}
-           <button onClick={() => setCurrentTab("dashboard")} className={`text-sm cursor-pointer transition-colors ${currentTab === "dashboard" ? "text-[#006B4A]" : "text-slate-600 hover:text-slate-900"}`}>Dashboard</button>
+           <button
+             onClick={() => {
+               setIsAdminMode(false);
+               setCurrentTab("dashboard");
+             }}
+             className={`text-sm cursor-pointer transition-colors ${!isAdminMode && currentTab === "dashboard" ? "text-[#006B4A]" : "text-slate-600 hover:text-slate-900"}`}
+           >
+             Dashboard
+           </button>
            <button onClick={onLogout} className="text-sm text-slate-600 hover:text-red-600 transition-colors cursor-pointer">Logout</button>
         </div>
         

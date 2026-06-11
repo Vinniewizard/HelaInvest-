@@ -134,6 +134,7 @@ export default function App() {
         setCurrentUser(data.user);
         if (window.location.pathname.startsWith('/secure-admin') && data.user.isAdmin) {
           setIsAdminMode(true);
+          setCurrentTab("admin");
         }
         await loadAllUserData(data.user.id);
       } else {
@@ -152,6 +153,63 @@ export default function App() {
     checkSession();
   }, [checkSession]);
 
+  // Synchronize React state & Browser URL with History API
+  useEffect(() => {
+    if (!currentUser) return;
+
+    const handleLocationChange = () => {
+      const path = window.location.pathname;
+      const onAdminPath = path.startsWith("/secure-admin");
+
+      if (onAdminPath) {
+        if (currentUser.isAdmin) {
+          setIsAdminMode((prev) => {
+            if (!prev) return true;
+            return prev;
+          });
+          setCurrentTab((prevTab) => {
+            if (prevTab !== "admin") return "admin";
+            return prevTab;
+          });
+        } else {
+          setIsAdminMode(false);
+          setCurrentTab((prevTab) => (prevTab === "admin" ? "dashboard" : prevTab));
+          window.history.replaceState(null, "", "/");
+          toast.error("Access Denied: You do not have administrator permissions.");
+        }
+      } else {
+        setIsAdminMode((prev) => {
+          if (prev) return false;
+          return prev;
+        });
+        setCurrentTab((prevTab) => {
+          if (prevTab === "admin") return "dashboard";
+          return prevTab;
+        });
+      }
+    };
+
+    // State -> URL logic
+    const path = window.location.pathname;
+    if (isAdminMode && currentUser.isAdmin) {
+      if (!path.startsWith("/secure-admin")) {
+        window.history.pushState(null, "", "/secure-admin/");
+      }
+    } else {
+      if (path.startsWith("/secure-admin")) {
+        window.history.pushState(null, "", "/");
+      }
+    }
+
+    window.addEventListener("popstate", handleLocationChange);
+    // Run sync
+    handleLocationChange();
+
+    return () => {
+      window.removeEventListener("popstate", handleLocationChange);
+    };
+  }, [currentUser, isAdminMode]);
+
   // Key combination Alt + A to toggle Admin Mode
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -165,9 +223,11 @@ export default function App() {
               const nextMode = !prev;
               if (nextMode) {
                 setCurrentTab("admin");
+                window.history.pushState(null, "", "/secure-admin/");
                 toast.success("HelaVest Secure Admin Interface Opened");
               } else {
                 setCurrentTab("dashboard");
+                window.history.pushState(null, "", "/");
                 toast.info("Switched to Standard User Terminal Interface");
               }
               return nextMode;
@@ -192,6 +252,7 @@ export default function App() {
     setCurrentUser(user);
     if (window.location.pathname.startsWith('/secure-admin') && user.isAdmin) {
       setIsAdminMode(true);
+      setCurrentTab("admin");
     } else {
       setIsAdminMode(false);
       setCurrentTab("dashboard");
@@ -209,6 +270,7 @@ export default function App() {
     setReferrals([]);
     setIsAdminMode(false);
     setCurrentTab("dashboard");
+    window.history.pushState(null, "", "/");
   };
 
   const handleDeposit = async (amount: number, phone: string, note: string) => {

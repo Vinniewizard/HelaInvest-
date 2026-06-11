@@ -63,10 +63,24 @@ export default function Login({ onLoginSuccess, onNavigateToRegister }: LoginPro
         <div className="w-full max-w-[480px] bg-white rounded-2xl shadow-xl overflow-hidden p-8 sm:p-10 relative">
           
           <div className="mb-8 text-left">
-            <span className="text-[10px] font-bold text-amber-600 tracking-wider uppercase mb-2 block">
-              Secure Access
-            </span>
-            <h2 className="text-4xl font-bold text-slate-900 tracking-tight">Welcome back</h2>
+            {(() => {
+              const isAdminPath = typeof window !== "undefined" && window.location.pathname.startsWith("/secure-admin");
+              return (
+                <>
+                  <span className={`text-[10px] font-black tracking-wider uppercase mb-2 block ${isAdminPath ? "text-rose-700 bg-rose-50 px-2 py-0.5 rounded border border-rose-200 inline-block" : "text-amber-600"}`}>
+                    {isAdminPath ? "Administrative Access Gateway" : "Secure Access"}
+                  </span>
+                  <h2 className="text-3xl font-black text-slate-950 tracking-tight">
+                    {isAdminPath ? "Admin Core Entry" : "Welcome back"}
+                  </h2>
+                  {isAdminPath && (
+                    <p className="text-[11px] text-slate-500 font-semibold leading-relaxed mt-2.5">
+                      Authentication required. Please authenticate below using your authorized <strong className="text-rose-750 font-black">GADMIN</strong> credentials.
+                    </p>
+                  )}
+                </>
+              );
+            })()}
           </div>
 
           {error && (

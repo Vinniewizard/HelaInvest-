@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { ShieldAlert, AlertCircle, RefreshCw } from "lucide-react";
+import { ShieldAlert, AlertCircle, RefreshCw, Info } from "lucide-react";
 import { Toaster, toast } from "sonner";
 
 import { User, WalletBalance, DashboardStats, Transaction, Investment, ReferralRecord, Plan } from "./types";
@@ -153,44 +153,11 @@ export default function App() {
     checkSession();
   }, [checkSession]);
 
-  // Synchronize React state & Browser URL with History API
+  // 1. STATE -> URL: Update URL path when isAdminMode state shifts in response to UI actions
   useEffect(() => {
     if (!currentUser) return;
-
-    const handleLocationChange = () => {
-      const path = window.location.pathname;
-      const onAdminPath = path.startsWith("/secure-admin");
-
-      if (onAdminPath) {
-        if (currentUser.isAdmin) {
-          setIsAdminMode((prev) => {
-            if (!prev) return true;
-            return prev;
-          });
-          setCurrentTab((prevTab) => {
-            if (prevTab !== "admin") return "admin";
-            return prevTab;
-          });
-        } else {
-          setIsAdminMode(false);
-          setCurrentTab((prevTab) => (prevTab === "admin" ? "dashboard" : prevTab));
-          window.history.replaceState(null, "", "/");
-          toast.error("Access Denied: You do not have administrator permissions.");
-        }
-      } else {
-        setIsAdminMode((prev) => {
-          if (prev) return false;
-          return prev;
-        });
-        setCurrentTab((prevTab) => {
-          if (prevTab === "admin") return "dashboard";
-          return prevTab;
-        });
-      }
-    };
-
-    // State -> URL logic
     const path = window.location.pathname;
+    
     if (isAdminMode && currentUser.isAdmin) {
       if (!path.startsWith("/secure-admin")) {
         window.history.pushState(null, "", "/secure-admin/");
@@ -200,15 +167,34 @@ export default function App() {
         window.history.pushState(null, "", "/");
       }
     }
+  }, [isAdminMode, currentUser]);
 
-    window.addEventListener("popstate", handleLocationChange);
-    // Run sync
-    handleLocationChange();
+  // 2. URL -> STATE: Listen for browser history traversal events (Back / Forward)
+  useEffect(() => {
+    if (!currentUser) return;
 
-    return () => {
-      window.removeEventListener("popstate", handleLocationChange);
+    const handlePopstate = () => {
+      const path = window.location.pathname;
+      const onAdminPath = path.startsWith("/secure-admin");
+      
+      if (onAdminPath) {
+        if (currentUser.isAdmin) {
+          setIsAdminMode(true);
+          setCurrentTab("admin");
+        }
+      } else {
+        setIsAdminMode(false);
+        if (currentTab === "admin") {
+          setCurrentTab("dashboard");
+        }
+      }
     };
-  }, [currentUser, isAdminMode]);
+
+    window.addEventListener("popstate", handlePopstate);
+    return () => {
+      window.removeEventListener("popstate", handlePopstate);
+    };
+  }, [currentUser, currentTab]);
 
   // Key combination Alt + A to toggle Admin Mode
   useEffect(() => {
@@ -365,6 +351,66 @@ export default function App() {
         onLoginSuccess={handleLoginSuccess}
         onNavigateToRegister={() => setIsRegistering(true)}
       />
+    );
+  }
+
+  const isCurrentlyAdminPath = typeof window !== "undefined" && window.location.pathname.startsWith("/secure-admin");
+
+  if (isCurrentlyAdminPath && !currentUser.isAdmin) {
+    return (
+      <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center p-6 text-slate-100 font-sans">
+        <Toaster theme="light" position="top-right" />
+        <div className="w-full max-w-sm bg-slate-950 border border-slate-800 rounded-2xl p-8 shadow-2xl space-y-6 relative overflow-hidden">
+          {/* Accent glow */}
+          <div className="absolute top-0 right-0 h-32 w-32 bg-rose-500/10 rounded-full blur-3xl pointer-events-none" />
+          
+          <div className="flex flex-col items-center text-center space-y-4">
+            <div className="h-14 w-14 bg-rose-500/10 rounded-full border border-rose-500/20 flex items-center justify-center">
+              <ShieldAlert className="h-7 w-7 text-rose-500 animate-pulse" />
+            </div>
+            
+            <div className="space-y-1.5">
+              <span className="text-[10px] bg-rose-500/20 text-rose-300 border border-rose-500/30 px-2.5 py-0.5 rounded-full font-black uppercase tracking-wide inline-block animate-pulse">
+                Authentication Conflict
+              </span>
+              <h2 className="text-xl font-black text-white">Access Denied</h2>
+            </div>
+            
+            <p className="text-xs text-slate-400 leading-relaxed font-semibold">
+              You are currently authenticated with the standard client profile <strong className="text-slate-200">"{currentUser.username}"</strong>, but the URL path <code className="bg-slate-900 border border-slate-800 px-1.5 py-0.5 rounded font-mono text-[10.5px] text-pink-400">/secure-admin/</code> requires dedicated administrative authorization.
+            </p>
+          </div>
+
+          <div className="bg-slate-900/50 flex flex-col gap-3 rounded-xl border border-slate-800 p-4">
+            <h5 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+              <Info className="h-3.5 w-3.5 text-indigo-400" /> Resolution Action:
+            </h5>
+            <ul className="text-[11px] text-slate-350 space-y-2 list-disc list-inside font-semibold leading-relaxed">
+              <li>Log out to switch to <strong className="text-amber-400 font-black">GADMIN</strong> credentials.</li>
+              <li>Or return directly to your safe standard client platform.</li>
+            </ul>
+          </div>
+
+          <div className="flex flex-col gap-2.5">
+            <button
+              onClick={handleLogout}
+              className="w-full py-3 bg-rose-600 hover:bg-rose-700 hover:shadow-lg text-white text-xs font-bold uppercase tracking-wider rounded-xl transition-all cursor-pointer text-center border-none"
+            >
+              Logout & Connect Admin Portal
+            </button>
+            <button
+              onClick={() => {
+                window.history.pushState(null, "", "/");
+                setIsAdminMode(false);
+                setCurrentTab("dashboard");
+              }}
+              className="w-full py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-bold rounded-xl transition-all cursor-pointer border border-slate-800 text-center"
+            >
+              Return to Standard Workspace
+            </button>
+          </div>
+        </div>
+      </div>
     );
   }
 

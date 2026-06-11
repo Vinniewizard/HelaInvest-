@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Wallet, ArrowDownCircle, ArrowUpCircle, History, Coins, ListTodo, ShieldAlert, CheckCircle2, XCircle, Clock, Sparkles, Copy, RefreshCw, Check, QrCode, Smartphone, Info, Shield, CheckCircle } from "lucide-react";
+import { Wallet, ArrowDownCircle, ArrowUpCircle, History, Coins, ListTodo, ShieldAlert, CheckCircle2, XCircle, Clock, Sparkles, Copy, RefreshCw, Check, QrCode, Smartphone, Info, Shield, CheckCircle, ChevronRight } from "lucide-react";
 import { Transaction, WalletBalance } from "../types";
 import { useCurrency } from "../context/CurrencyContext";
 import { toast } from "sonner";
@@ -48,6 +48,34 @@ export default function WalletComponent({
   const [depLoading, setDepLoading] = useState(false);
 
   const [formMsg, setFormMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
+  const [cancellingTxId, setCancellingTxId] = useState<string | null>(null);
+
+  const handleCancelPendingDeposit = async (txId: string) => {
+    setCancellingTxId(txId);
+    try {
+      const res = await fetch("/api/transactions/cancel-pending-deposit", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-user-id": localStorage.getItem("hela_user_id") || "",
+        },
+        body: JSON.stringify({ txId }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        toast.success(data.message || "Pending deposit cancelled successfully.");
+        setFormMsg(null);
+        onRefresh();
+      } else {
+        toast.error(data.error || "Failed to cancel pending deposit.");
+      }
+    } catch (e) {
+      toast.error("Network communication error.");
+    } finally {
+      setCancellingTxId(null);
+    }
+  };
 
   // Load backend payment settings on component activation
   useEffect(() => {
@@ -276,6 +304,69 @@ export default function WalletComponent({
       {/* Deposit Layout */}
       {activeSubTab === "deposit" && (
         <div className="space-y-6">
+          {(() => {
+            const activePendingDeposit = transactions.find(
+              (t) => t.transaction_type === "deposit" && t.status === "pending"
+            );
+            if (!activePendingDeposit) return null;
+
+            return (
+              <div className="bg-amber-500/5 border border-amber-500/20 p-5 rounded-2xl space-y-3.5 shadow-sm animate-fade-in text-slate-800">
+                <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-3">
+                  <div className="flex items-start gap-3">
+                    <div className="bg-amber-500/10 p-2.5 rounded-xl text-amber-700 shrink-0">
+                      <Clock className="h-5 w-5 animate-pulse" />
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-black text-amber-900 uppercase tracking-wider flex items-center gap-1.5 leading-none">
+                        Active Pending Deposit Lockout Protection
+                      </h4>
+                      <p className="text-[11px] text-amber-800 font-medium leading-relaxed mt-1.5">
+                        You have an unresolved deposit transaction for <strong className="text-amber-950 font-extrabold">{format(activePendingDeposit.amount)}</strong> initiated on{" "}
+                        <span className="font-mono text-[10px] bg-amber-500/10 px-1.5 py-0.5 rounded font-bold">
+                          {new Date(activePendingDeposit.created_at).toLocaleDateString()}{" "}
+                          {new Date(activePendingDeposit.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                        </span>{" "}
+                        ({activePendingDeposit.phone || "Universal core channel"}).
+                      </p>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => handleCancelPendingDeposit(activePendingDeposit.id)}
+                    disabled={!!cancellingTxId}
+                    className="bg-amber-500/10 hover:bg-amber-500/15 border border-amber-500/20 font-extrabold text-[10px] text-amber-950 uppercase tracking-wide px-4 py-2.5 rounded-xl cursor-pointer transition-all flex items-center justify-center gap-1.5 shrink-0"
+                  >
+                    {cancellingTxId === activePendingDeposit.id ? (
+                      <span className="h-3.5 w-3.5 border-2 border-amber-900 border-t-transparent rounded-full animate-spin"></span>
+                    ) : (
+                      <>
+                        <XCircle className="h-4 w-4 text-amber-800" />
+                        Decline & Release Lock
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                <div className="text-[10px] text-amber-800/80 leading-relaxed font-semibold pl-11 border-t border-amber-500/10 pt-2 flex items-center justify-between gap-4">
+                  <span>
+                    ⚠️ Only one pending deposit transaction may exist on the server to prevent duplicates. Declining this lock clears the pending ledger entry, letting you start fresh immediately!
+                  </span>
+                  {activePendingDeposit.phone?.includes("Crypto") && (
+                    <button
+                      type="button"
+                      onClick={() => setDepositMethod("crypto")}
+                      className="text-[10px] text-[#006B4A] hover:underline font-extrabold uppercase tracking-wider flex items-center gap-0.5 transition-all shrink-0"
+                    >
+                      View QR Address <ChevronRight className="h-3 w-3" />
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
+
           {/* Method chooser */}
           <div className="bg-white border border-slate-200 p-4 rounded-xl shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4">
             <div className="text-left">

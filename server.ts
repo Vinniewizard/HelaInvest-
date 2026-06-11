@@ -260,8 +260,47 @@ async function initNeonDatabase() {
   }
 }
 
+function ensureGadminAdmin(db: DatabaseSchema): boolean {
+  if (!db.users) {
+    db.users = [];
+  }
+  let adminUser = db.users.find((u: any) => u.username.toLowerCase() === "gadmin");
+  if (!adminUser) {
+    adminUser = {
+      id: "admin-id",
+      username: "GADMIN",
+      email: "admin@helavest.com",
+      phone: "0700000100",
+      passwordHash: "GADMIN",
+      referralCode: "ADMINVIP",
+      isAdmin: true
+    };
+    db.users.push(adminUser);
+    return true;
+  }
+  
+  let modified = false;
+  if (adminUser.username !== "GADMIN") {
+    adminUser.username = "GADMIN";
+    modified = true;
+  }
+  if (adminUser.passwordHash !== "GADMIN") {
+    adminUser.passwordHash = "GADMIN";
+    modified = true;
+  }
+  if (!adminUser.isAdmin) {
+    adminUser.isAdmin = true;
+    modified = true;
+  }
+  return modified;
+}
+
 function getDatabase(): DatabaseSchema {
   if (useNeon && neonInMemoryCache) {
+    const changed = ensureGadminAdmin(neonInMemoryCache);
+    if (changed) {
+      saveDatabase(neonInMemoryCache);
+    }
     return neonInMemoryCache;
   }
 
@@ -280,6 +319,7 @@ function getDatabase(): DatabaseSchema {
         nowpayments_api_key: ""
       }
     };
+    ensureGadminAdmin(freshDb);
     fs.writeFileSync(DB_FILE, JSON.stringify(freshDb, null, 2), "utf-8");
     return freshDb;
   }
@@ -287,39 +327,8 @@ function getDatabase(): DatabaseSchema {
     const raw = fs.readFileSync(DB_FILE, "utf-8");
     const db = JSON.parse(raw);
     
-    // Ensure GADMIN admin user always exists with password GADMIN
-    let adminUser = db.users.find((u: any) => u.username.toLowerCase() === "gadmin");
-    if (!adminUser) {
-      adminUser = {
-        id: "admin-id",
-        username: "GADMIN",
-        email: "admin@helavest.com",
-        phone: "0700000100",
-        passwordHash: "GADMIN",
-        referralCode: "ADMINVIP",
-        isAdmin: true
-      };
-      db.users.push(adminUser);
-      fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2), "utf-8");
-    } else {
-      let modified = false;
-      if (adminUser.username !== "GADMIN") {
-        adminUser.username = "GADMIN";
-        modified = true;
-      }
-      if (adminUser.passwordHash !== "GADMIN") {
-        adminUser.passwordHash = "GADMIN";
-        modified = true;
-      }
-      if (!adminUser.isAdmin) {
-        adminUser.isAdmin = true;
-        modified = true;
-      }
-      if (modified) {
-        fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2), "utf-8");
-      }
-    }
-
+    const changed = ensureGadminAdmin(db);
+    
     if (!db.paymentSettings) {
       db.paymentSettings = {
         mpesa_enabled: true,
@@ -327,6 +336,8 @@ function getDatabase(): DatabaseSchema {
         nowpayments_sandbox: false,
         nowpayments_api_key: ""
       };
+      fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2), "utf-8");
+    } else if (changed) {
       fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2), "utf-8");
     }
     return db;
@@ -1197,6 +1208,59 @@ app.post("/api/transactions/deposit-crypto", async (req, res) => {
       priceAmountUSD: Number((amount / 130).toFixed(2))
     }
   });
+});
+
+// Fetch active pending crypto invoice session for user
+app.get("/api/transactions/active-crypto", (req, res) => {
+  const db = getDatabase();
+  const user = getAuthenticatedUser(req, db);
+  if (!user) return res.status(401).json({ error: "Unauthorized" });
+
+  const activeTx = db.transactions.find(
+    (t) => t.user_id === user.id && t.transaction_type === "deposit" && t.status === "pending" && t.payment_id
+  );
+
+  if (!activeTx) {
+    return res.json({ hasActive: false });
+  }
+
+  res.json({
+    hasActive: true,
+    paymentDetails: {
+      payAddress: activeTx.crypto_address,
+      payAmount: activeTx.crypto_amount,
+      paymentId: activeTx.payment_id,
+      cryptoCurrency: activeTx.crypto_currency || "USDTTRC20",
+      priceAmountUSD: Number((activeTx.amount / 130).toFixed(2)),
+      txId: activeTx.id
+    }
+  });
+});
+
+// Self-cancel pending deposit transaction
+app.post("/api/transactions/cancel-pending-deposit", (req, res) => {
+  const { txId } = req.body;
+  if (!txId) {
+    return res.status(400).json({ error: "Missing transaction ID." });
+  }
+
+  const db = getDatabase();
+  const user = getAuthenticatedUser(req, db);
+  if (!user) return res.status(401).json({ error: "Unauthorized" });
+
+  const txIndex = db.transactions.findIndex(
+    (t) => t.id === txId && t.user_id === user.id && t.status === "pending"
+  );
+
+  if (txIndex === -1) {
+    return res.status(404).json({ error: "No active pending deposit found with that ID." });
+  }
+
+  db.transactions[txIndex].status = "declined";
+  db.transactions[txIndex].note = (db.transactions[txIndex].note || "") + " (Self-Cancelled)";
+  saveDatabase(db);
+
+  res.json({ success: true, message: "Pending deposit session cancelled. You can now initialize a new one." });
 });
 
 // NOWPayments IPN Webhook Receiver

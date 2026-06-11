@@ -1027,51 +1027,18 @@ async function triggerNowPaymentsDeposit(
   gatewayMessage?: string;
   error?: string;
 }> {
-  const isSandbox = db.paymentSettings?.nowpayments_sandbox ?? false;
   const apiKey = db.paymentSettings?.nowpayments_api_key || process.env.NOWPAYMENTS_API_KEY;
 
   // Calculate amount in USD (primary base currency for NOWPayments)
   const amountUSD = Number((amountKES / 130).toFixed(2));
   const normalizedCrypto = cryptoCurrency.toLowerCase();
 
-  console.log(`[NOWPayments] Initiating payment. Amount KES: ${amountKES} (~$${amountUSD} USD). Crypto: ${cryptoCurrency}. TX: ${txId}. Sandbox: ${isSandbox}`);
+  console.log(`[NOWPayments] Initiating payment. Amount KES: ${amountKES} (~$${amountUSD} USD). Crypto: ${cryptoCurrency}. TX: ${txId}.`);
 
-  if (!isSandbox && !apiKey) {
+  if (!apiKey) {
     return {
       success: false,
-      error: "NOWPayments API Key is not configured by the administrator. Please update secure payment settings inside the Admin Hub or define NOWPAYMENTS_API_KEY in environment variables."
-    };
-  }
-
-  if (isSandbox) {
-    // Generate lovely realistic mock data for preview sandbox mode
-    const mockAddresses: Record<string, string> = {
-      btc: "bc1q7nry5t3v84u728p9gjrsqyzb3f83kkm0wlh",
-      eth: "0x71C46E91F7C1CC2E123af6c63E32630FF0E9Fdc9",
-      usdttrc20: "TXPrt123T77gV5bE888D16H91F7C1CabcD",
-      usdcerp20: "0x32630FF0E9Fdc971C46E91F7C1CC2E123af6c",
-      usdtbsc: "0x0B6bc1AbCdE9Fdc971C46E91F7C1CC2E123af6c"
-    };
-    
-    // Simple mock exchange rates relative to USD
-    const mockRates: Record<string, number> = {
-      btc: 0.0000155,
-      eth: 0.00032,
-      usdttrc20: 1.0,
-      usdcerp20: 1.0,
-      usdtbsc: 1.0
-    };
-
-    const rate = mockRates[normalizedCrypto] || 1.0;
-    const cryptoAmount = Number((amountUSD * rate).toFixed(6));
-    const payAddress = mockAddresses[normalizedCrypto] || "0x71C46E91F7C1CC2E123af6c63E32630FF0E9Fdc9";
-
-    return {
-      success: true,
-      payAddress,
-      payAmount: cryptoAmount,
-      paymentId: "nw-" + Math.floor(100000000 + Math.random() * 900000000).toString(),
-      gatewayMessage: `🎉 Simulated crypto payment generated successfully relative to your USD amount ($${amountUSD} USD and ${cryptoAmount} ${cryptoCurrency.toUpperCase()}). Please proceed with sandbox payment!`
+      error: "NOWPayments API Key is not configured. Please define NOWPAYMENTS_API_KEY or set it in Admin Hub."
     };
   }
 
@@ -1080,7 +1047,7 @@ async function triggerNowPaymentsDeposit(
     const baseUrl = process.env.NOWPAYMENTS_BASE_URL || "https://api.nowpayments.io/v1";
     const ipnCallbackUrl = process.env.IPN_CALLBACK_URL || (process.env.APP_URL ? `${process.env.APP_URL}/api/callbacks/nowpayments` : "https://ais-dev-yb5liyh6fvh47qawmql43k-597530057912.europe-west2.run.app/api/callbacks/nowpayments");
     
-    console.log(`[NOWPayments Live Request] Sending call to ${baseUrl}/payment with IPN URL: ${ipnCallbackUrl}`);
+    console.log(`[NOWPayments Production Request] Sending call to ${baseUrl}/payment with IPN URL: ${ipnCallbackUrl}`);
 
     const response = await fetch(`${baseUrl}/payment`, {
       method: "POST",
@@ -1108,7 +1075,7 @@ async function triggerNowPaymentsDeposit(
         payAddress: data.pay_address,
         payAmount: data.pay_amount,
         paymentId: data.payment_id,
-        gatewayMessage: "Live crypto deposit generated successfully via NOWPayments client interface."
+        gatewayMessage: "Live crypto deposit generated successfully via NOWPayments production interface."
       };
     } else {
       return {
@@ -1139,30 +1106,22 @@ async function triggerNowPaymentsPayout(
   payoutId?: string;
   error?: string;
 }> {
-  const isSandbox = db.paymentSettings?.nowpayments_sandbox ?? false;
   const apiKey = db.paymentSettings?.nowpayments_api_key || process.env.NOWPAYMENTS_API_KEY;
 
   const amountUSD = Number((amountKES / 130).toFixed(2));
   const normalizedCrypto = cryptoCurrency.toLowerCase();
 
-  console.log(`[NOWPayments Payout] Preparing payout. Amount KES: ${amountKES} (~$${amountUSD} USD). Crypto: ${cryptoCurrency}. Destination: ${payoutAddress}. Sandbox: ${isSandbox}`);
+  console.log(`[NOWPayments Payout] Preparing payout. Amount KES: ${amountKES} (~$${amountUSD} USD). Crypto: ${cryptoCurrency}. Destination: ${payoutAddress}.`);
 
-  if (!isSandbox && !apiKey) {
+  if (!apiKey) {
     return {
       success: false,
-      error: "NOWPayments API Key is not configured by the administrator."
-    };
-  }
-
-  if (isSandbox) {
-    return {
-      success: true,
-      payoutId: "payout-mock-" + Math.floor(1000000 + Math.random() * 9000000).toString()
+      error: "NOWPayments API Key is not configured. Please define NOWPAYMENTS_API_KEY or configure it in Admin Hub."
     };
   }
 
   try {
-    const baseUrl = "https://api.nowpayments.io/v1";
+    const baseUrl = process.env.NOWPAYMENTS_BASE_URL || "https://api.nowpayments.io/v1";
     
     // Perform standard NOWPayments payout request
     const response = await fetch(`${baseUrl}/payout`, {

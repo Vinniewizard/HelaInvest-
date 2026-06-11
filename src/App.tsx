@@ -277,9 +277,59 @@ export default function App() {
     window.history.pushState(null, "", "/");
   };
 
-  const handleDeposit = async (amount: number, phone: string, note: string) => {
+  const handleDeposit = async (amount: number, phone: string, note: string, isCrypto?: boolean, cryptoCurrency?: string) => {
     if (!currentUser) return;
     try {
+      const apiKey = (import.meta as any).env.VITE_NOWPAYMENTS_API_KEY || "";
+      const baseUrl = (import.meta as any).env.VITE_NOWPAYMENTS_BASE_URL || "https://api.nowpayments.io/v1";
+
+      if (isCrypto && cryptoCurrency) {
+        if (apiKey) {
+          const amountUSD = Number((amount / 130).toFixed(2));
+          console.log(`[NOWPayments Direct Client] Creating payment for $${amountUSD} USD`);
+          const res = await fetch(`${baseUrl}/payment`, {
+            method: "POST",
+            headers: {
+              "x-api-key": apiKey,
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+              price_amount: amountUSD,
+              price_currency: "usd",
+              pay_amount: null,
+              pay_currency: cryptoCurrency.toLowerCase(),
+              order_id: "tx-cli-" + Math.random().toString(36).substr(2, 9),
+              order_description: `Direct Crypto Deposit for ${currentUser.username}`
+            })
+          });
+          if (res.ok) {
+            const data = await res.json();
+            const localTxRes = await fetch("/api/transactions/deposit-crypto", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "x-user-id": currentUser.id,
+              },
+              body: JSON.stringify({ amount, cryptoCurrency, note: note || "Crypto deposit (Direct NOWPayments)", customDetails: data }),
+            });
+            return await localTxRes.json();
+          }
+        }
+
+        // Backend Proxy Route
+        const response = await fetch("/api/transactions/deposit-crypto", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-user-id": currentUser.id,
+          },
+          body: JSON.stringify({ amount, cryptoCurrency, note }),
+        });
+        const data = await response.json();
+        return data;
+      }
+
+      // Default to Standard M-Pesa deposit
       const response = await fetch("/api/transactions/deposit", {
         method: "POST",
         headers: {
@@ -299,6 +349,50 @@ export default function App() {
   const handleWithdrawal = async (amount: number, phone: string, note: string, cryptoAddress?: string, cryptoCurrency?: string) => {
     if (!currentUser) return;
     try {
+      const apiKey = (import.meta as any).env.VITE_NOWPAYMENTS_API_KEY || "";
+      const baseUrl = (import.meta as any).env.VITE_NOWPAYMENTS_BASE_URL || "https://api.nowpayments.io/v1";
+
+      if (cryptoAddress && cryptoCurrency && apiKey) {
+        const amountUSD = Number((amount / 130).toFixed(2));
+        console.log(`[NOWPayments Direct Payout] Initiating direct payout for $${amountUSD} USD to ${cryptoAddress}`);
+        const res = await fetch(`${baseUrl}/payout`, {
+          method: "POST",
+          headers: {
+            "x-api-key": apiKey,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            withdrawals: [
+              {
+                address: cryptoAddress,
+                amount: amountUSD,
+                currency: cryptoCurrency.toLowerCase()
+              }
+            ]
+          })
+        });
+        if (res.ok) {
+          const data = await res.json();
+          const localTxRes = await fetch("/api/transactions/withdraw", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "x-user-id": currentUser.id,
+            },
+            body: JSON.stringify({
+              amount,
+              phone,
+              note: note || "Crypto payout client-execution",
+              crypto_address: cryptoAddress,
+              crypto_currency: cryptoCurrency,
+              payment_id: data.id || data.payout_id
+            }),
+          });
+          return await localTxRes.json();
+        }
+      }
+
+      // Secure Backend Route Proxy
       const response = await fetch("/api/transactions/withdraw", {
         method: "POST",
         headers: {

@@ -1013,6 +1013,45 @@ app.post("/api/callbacks/lipia", (req, res) => {
 // -------------------------------------------------------------
 // NOWPAYMENTS CRYPTO INTEGRATION HELPER
 // -------------------------------------------------------------
+function getMockCryptoAddress(currency: string): string {
+  const cur = currency.toLowerCase();
+  if (cur.includes("trx") || cur.includes("trc20")) {
+    return "TY8bV78v4zYmDe76Cdf9eR2B1A8X7vN3K2";
+  }
+  if (cur.includes("btc")) {
+    return "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa";
+  }
+  if (cur.includes("eth") || cur.includes("erc20")) {
+    return "0x742d35Cc6634C0532925a3b844Bc454e4438f44e";
+  }
+  return "0x3f5CE5FBFe3E9af3971dD833D26bA9b5C936f0bE";
+}
+
+function generateLocalSandboxInvoice(amountUSD: number, cryptoCurrency: string, txId: string) {
+  const normalizedCrypto = cryptoCurrency.toLowerCase();
+  let cryptoRate = 1.0;
+  if (normalizedCrypto.includes("usdt") || normalizedCrypto.includes("usdc")) {
+    cryptoRate = 1.0;
+  } else if (normalizedCrypto === "btc" || normalizedCrypto.includes("btc")) {
+    cryptoRate = 0.000015;
+  } else if (normalizedCrypto === "eth" || normalizedCrypto.includes("eth")) {
+    cryptoRate = 0.00028;
+  } else if (normalizedCrypto === "trx" || normalizedCrypto.includes("trx")) {
+    cryptoRate = 8.5;
+  }
+
+  const mockPayAmount = Number((amountUSD * cryptoRate).toFixed(6));
+  const mockPayAddress = getMockCryptoAddress(normalizedCrypto);
+
+  return {
+    success: true,
+    payAddress: mockPayAddress,
+    payAmount: mockPayAmount,
+    paymentId: `nw-${Math.random().toString(36).substr(2, 9)}`,
+    gatewayMessage: "🎉 Simulated sandbox invoice generated locally. Since Sandbox Mode is active in your system, you can test this payment flow utilizing the status checker or clear simulator seamlessly."
+  };
+}
+
 async function triggerNowPaymentsDeposit(
   amountKES: number,
   cryptoCurrency: string,
@@ -1028,14 +1067,19 @@ async function triggerNowPaymentsDeposit(
   error?: string;
 }> {
   const apiKey = db.paymentSettings?.nowpayments_api_key || process.env.NOWPAYMENTS_API_KEY;
+  const isSandbox = db.paymentSettings?.nowpayments_sandbox ?? false;
 
   // Calculate amount in USD (primary base currency for NOWPayments)
   const amountUSD = Number((amountKES / 130).toFixed(2));
   const normalizedCrypto = cryptoCurrency.toLowerCase();
 
-  console.log(`[NOWPayments] Initiating payment. Amount KES: ${amountKES} (~$${amountUSD} USD). Crypto: ${cryptoCurrency}. TX: ${txId}.`);
+  console.log(`[NOWPayments] Initiating payment. Amount KES: ${amountKES} (~$${amountUSD} USD). Crypto: ${cryptoCurrency}. TX: ${txId}. Sandbox Mode: ${isSandbox}.`);
 
   if (!apiKey) {
+    if (isSandbox) {
+      console.log("[NOWPayments] Sandbox enabled but API Key is missing. Falling back to local high-fidelity sandbox invoice simulation.");
+      return generateLocalSandboxInvoice(amountUSD, normalizedCrypto, txId);
+    }
     return {
       success: false,
       error: "NOWPayments API Key is not configured. Please define NOWPAYMENTS_API_KEY or set it in Admin Hub."
@@ -1044,10 +1088,10 @@ async function triggerNowPaymentsDeposit(
 
   // Live NOWPayments API Call
   try {
-    const baseUrl = process.env.NOWPAYMENTS_BASE_URL || "https://api.nowpayments.io/v1";
+    const baseUrl = process.env.NOWPAYMENTS_BASE_URL || (isSandbox ? "https://api-sandbox.nowpayments.io/v1" : "https://api.nowpayments.io/v1");
     const ipnCallbackUrl = process.env.IPN_CALLBACK_URL || (process.env.APP_URL ? `${process.env.APP_URL}/api/callbacks/nowpayments` : "https://ais-dev-yb5liyh6fvh47qawmql43k-597530057912.europe-west2.run.app/api/callbacks/nowpayments");
     
-    console.log(`[NOWPayments Production Request] Sending call to ${baseUrl}/payment with IPN URL: ${ipnCallbackUrl}`);
+    console.log(`[NOWPayments Production/Sandbox Request] Sending call to ${baseUrl}/payment with IPN URL: ${ipnCallbackUrl}`);
 
     const response = await fetch(`${baseUrl}/payment`, {
       method: "POST",
@@ -1058,7 +1102,6 @@ async function triggerNowPaymentsDeposit(
       body: JSON.stringify({
         price_amount: amountUSD,
         price_currency: "usd",
-        pay_amount: null,
         pay_currency: normalizedCrypto,
         ipn_callback_url: ipnCallbackUrl,
         order_id: txId,
@@ -1075,9 +1118,15 @@ async function triggerNowPaymentsDeposit(
         payAddress: data.pay_address,
         payAmount: data.pay_amount,
         paymentId: data.payment_id,
-        gatewayMessage: "Live crypto deposit generated successfully via NOWPayments production interface."
+        gatewayMessage: isSandbox
+          ? "Simulated sandbox crypto deposit generated successfully via NOWPayments sandbox interface."
+          : "Live crypto deposit generated successfully via NOWPayments production interface."
       };
     } else {
+      if (isSandbox) {
+        console.warn(`[NOWPayments Sandbox API Error]: ${data.message || 'HTTP ' + response.status}. Falling back to high-fidelity local simulation.`);
+        return generateLocalSandboxInvoice(amountUSD, normalizedCrypto, txId);
+      }
       return {
         success: false,
         error: data.message || `NOWPayments API Error: HTTP ${response.status}`
@@ -1085,6 +1134,10 @@ async function triggerNowPaymentsDeposit(
     }
   } catch (err: any) {
     console.error("[NOWPayments Connection Exception]:", err);
+    if (isSandbox) {
+      console.log("[NOWPayments Connection Exception Sandbox Fallback]: Falling back to high-fidelity local simulation.");
+      return generateLocalSandboxInvoice(amountUSD, normalizedCrypto, txId);
+    }
     return {
       success: false,
       error: err.message || "Failed to establish secure connection with NOWPayments network."
@@ -1107,13 +1160,21 @@ async function triggerNowPaymentsPayout(
   error?: string;
 }> {
   const apiKey = db.paymentSettings?.nowpayments_api_key || process.env.NOWPAYMENTS_API_KEY;
+  const isSandbox = db.paymentSettings?.nowpayments_sandbox ?? false;
 
   const amountUSD = Number((amountKES / 130).toFixed(2));
   const normalizedCrypto = cryptoCurrency.toLowerCase();
 
-  console.log(`[NOWPayments Payout] Preparing payout. Amount KES: ${amountKES} (~$${amountUSD} USD). Crypto: ${cryptoCurrency}. Destination: ${payoutAddress}.`);
+  console.log(`[NOWPayments Payout] Preparing payout. Amount KES: ${amountKES} (~$${amountUSD} USD). Crypto: ${cryptoCurrency}. Destination: ${payoutAddress}. Sandbox Mode: ${isSandbox}.`);
 
   if (!apiKey) {
+    if (isSandbox) {
+      console.log("[NOWPayments Payout] Sandbox active and API Key is missing. Simulating instant approved payouts.");
+      return {
+        success: true,
+        payoutId: `payout-sim-${Math.random().toString(36).substr(2, 9)}`
+      };
+    }
     return {
       success: false,
       error: "NOWPayments API Key is not configured. Please define NOWPAYMENTS_API_KEY or configure it in Admin Hub."
@@ -1121,7 +1182,7 @@ async function triggerNowPaymentsPayout(
   }
 
   try {
-    const baseUrl = process.env.NOWPAYMENTS_BASE_URL || "https://api.nowpayments.io/v1";
+    const baseUrl = process.env.NOWPAYMENTS_BASE_URL || (isSandbox ? "https://api-sandbox.nowpayments.io/v1" : "https://api.nowpayments.io/v1");
     
     // Perform standard NOWPayments payout request
     const response = await fetch(`${baseUrl}/payout`, {
@@ -1150,6 +1211,13 @@ async function triggerNowPaymentsPayout(
         payoutId: data.id || data.payout_id || "payout-live-ok"
       };
     } else {
+      if (isSandbox) {
+        console.warn(`[NOWPayments Sandbox Payout API Error]: ${data.message || 'HTTP ' + response.status}. Simulating approved payout.`);
+        return {
+          success: true,
+          payoutId: `payout-sim-${Math.random().toString(36).substr(2, 9)}`
+        };
+      }
       return {
         success: false,
         error: data.message || `NOWPayments Payout API error: HTTP ${response.status}`
@@ -1157,6 +1225,13 @@ async function triggerNowPaymentsPayout(
     }
   } catch (err: any) {
     console.error("[NOWPayments Payout Connection Exception]:", err);
+    if (isSandbox) {
+      console.log("[NOWPayments Payout Connection Exception Sandbox Fallback]: Simulating approved payout.");
+      return {
+        success: true,
+        payoutId: `payout-sim-${Math.random().toString(36).substr(2, 9)}`
+      };
+    }
     return {
       success: false,
       error: err.message || "Failed to dispatch payload to NOWPayments Payout network."

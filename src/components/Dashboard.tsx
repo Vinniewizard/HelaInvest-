@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Copy, ArrowRight, ShieldAlert, Sparkles, Coins, Flame, Gem, TrendingUp, HelpCircle } from "lucide-react";
+import { Copy, ArrowRight, ShieldAlert, ShieldCheck, Sparkles, Coins, Flame, Gem, TrendingUp, HelpCircle } from "lucide-react";
 import { User, DashboardStats, ReferralRecord, Plan, WalletBalance } from "../types";
 import { useCurrency } from "../context/CurrencyContext";
 
@@ -52,10 +52,16 @@ export default function Dashboard({ user, stats, referrals, plans, balance, onIn
     <div className="space-y-12 pb-8">
       {/* Intro section */}
       <div>
-        <div className="bg-[#f0f9ff] border border-blue-100 rounded-xl p-5 mb-8 text-[#0369a1]">
-          <p className="text-sm font-medium">
-            Account created. Welcome to your investment dashboard.
-          </p>
+        <div className="bg-[#f0faf6] border border-[#d2edd5] rounded-2xl p-4 sm:p-5 mb-8 text-[#006B4A] flex items-start sm:items-center gap-3.5 transition-all duration-300 hover:border-[#bde3c3] hover:shadow-xs">
+          <div className="bg-[#e6f4ed] p-2 rounded-xl flex-shrink-0 flex items-center justify-center border border-[#d2edd5]">
+            <ShieldCheck className="h-5 w-5 text-[#006B4A]" />
+          </div>
+          <div>
+            <p className="text-xs font-black uppercase tracking-wider text-[#00553b] mb-0.5">Secure Terminal Active</p>
+            <p className="text-[11px] sm:text-xs text-slate-600 font-bold leading-relaxed">
+              Your capital growth workspace has been successfully initialized. Welcome to HelaVest—explore curated investment tiers below to allocate your capital and monitor compounding yields.
+            </p>
+          </div>
         </div>
 
         <div>

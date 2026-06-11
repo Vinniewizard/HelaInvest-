@@ -54,8 +54,8 @@ export default function Header({
         </div>
  
         {/* Multi-Currency Selection Controls */}
-        <div className="flex items-center gap-1 bg-slate-100 hover:bg-slate-200/80 px-1.5 sm:px-3 py-1.5 rounded-xl border border-slate-200 transition-colors flex-shrink-0">
-          <Globe className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-[#006B4A]" />
+        <div className="group flex items-center gap-1 bg-slate-100 hover:bg-slate-200/80 px-1.5 sm:px-3 py-1.5 rounded-xl border border-slate-200 transition-all duration-200 hover:border-[#006B4A]/30 flex-shrink-0 hover:scale-103 active:scale-97">
+          <Globe className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-[#006B4A] group-hover:rotate-12 transition-transform duration-300 ease-out" />
           <select
             value={activeCurrency}
             onChange={(e) => setCurrency(e.target.value as CurrencyType)}
@@ -71,10 +71,10 @@ export default function Header({
         {/* Desktop nav links */}
         <div className="hidden sm:flex items-center justify-end gap-6 font-semibold flex-shrink-0">
            {balance !== null && (
-             <div className="flex items-center gap-1.5 bg-[#f0f9f6] text-[#006B4A] border border-[#d2edd5] px-3 py-1.5 rounded-full text-xs font-bold shadow-xs transition-transform hover:scale-102">
-               <Coins className="h-3.5 w-3.5 text-[#006B4A] animate-pulse" />
+             <div className="group flex items-center gap-1.5 bg-[#f0f9f6] text-[#006B4A] border border-[#d2edd5] px-3 py-1.5 rounded-full text-xs font-bold shadow-xs transition-all duration-200 hover:scale-105 active:scale-98 cursor-pointer">
+               <Coins className="h-3.5 w-3.5 text-[#006B4A] animate-pulse group-hover:rotate-12 transition-transform duration-300" />
                <span className="text-slate-500 font-semibold uppercase text-[9px] tracking-wider hidden md:inline">A/C Bal:</span>
-               <span className="text-xs font-extrabold">{format(balance.available_balance)}</span>
+               <span className="text-xs font-extrabold group-hover:text-[#004D34] transition-colors">{format(balance.available_balance)}</span>
              </div>
            )}
            <button
@@ -82,19 +82,19 @@ export default function Header({
                setIsAdminMode(false);
                setCurrentTab("dashboard");
              }}
-             className={`text-sm cursor-pointer transition-colors font-bold ${!isAdminMode && currentTab === "dashboard" ? "text-[#006B4A]" : "text-slate-600 hover:text-slate-900"}`}
+             className={`text-sm cursor-pointer transition-all duration-200 font-bold hover:scale-105 active:scale-95 ${!isAdminMode && currentTab === "dashboard" ? "text-[#006B4A]" : "text-slate-600 hover:text-slate-900"}`}
            >
              Dashboard
            </button>
-           <button onClick={onLogout} className="text-sm font-bold text-slate-600 hover:text-red-600 transition-colors cursor-pointer">Logout</button>
+           <button onClick={onLogout} className="text-sm font-bold text-slate-600 hover:text-red-600 transition-all duration-200 cursor-pointer hover:scale-105 active:scale-95">Logout</button>
         </div>
         
         {/* Mobile Nav Actions */}
         <div className="sm:hidden flex items-center gap-1.5 flex-shrink-0">
            {balance !== null && (
-             <span className="flex items-center gap-1 text-[10px] font-black text-[#006B4A] bg-[#f0f9f6] px-2 py-1 rounded-lg border border-[#d2edd5]">
-               <Coins className="h-3 w-3 text-[#006B4A]" />
-               {format(balance.available_balance)}
+             <span className="group flex items-center gap-1 text-[10px] font-black text-[#006B4A] bg-[#f0f9f6] px-2 py-1 rounded-lg border border-[#d2edd5] transition-all duration-200 hover:scale-105">
+               <Coins className="h-3 w-3 text-[#006B4A] group-hover:rotate-12 transition-transform duration-300" />
+               <span>{format(balance.available_balance)}</span>
              </span>
            )}
            <button
@@ -124,14 +124,14 @@ export default function Header({
                 <button
                   key={tab.id}
                   onClick={() => setCurrentTab(tab.id)}
-                  className={`px-3 md:px-5 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all whitespace-nowrap cursor-pointer flex items-center gap-2 ${
+                  className={`group px-3 md:px-5 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all duration-200 ease-out whitespace-nowrap cursor-pointer flex items-center gap-1.5 sm:gap-2 hover:scale-104 active:scale-96 ${
                     isActive
                       ? "bg-white text-[#006B4A] shadow-xs border border-slate-200"
-                      : "text-slate-500 hover:text-slate-850 hover:bg-slate-100/60"
+                      : "text-slate-500 hover:text-[#006B4A] hover:bg-white hover:shadow-xs border border-transparent hover:border-slate-100"
                   }`}
                 >
-                  <TabIcon className={`h-3.5 w-3.5 ${isActive ? "text-[#006B4A]" : "text-slate-400"}`} />
-                  <span>{tab.label}</span>
+                  <TabIcon className={`h-3.5 w-3.5 transition-transform duration-300 ease-out group-hover:scale-115 group-hover:rotate-3 ${isActive ? "text-[#006B4A]" : "text-slate-400 group-hover:text-[#006B4A]"}`} />
+                  <span className="transition-colors duration-200">{tab.label}</span>
                 </button>
               );
             })}
@@ -142,9 +142,9 @@ export default function Header({
                   setIsAdminMode(true);
                   setCurrentTab("admin");
                 }}
-                className={`px-3 py-2 rounded-xl text-xs sm:text-sm font-black transition-all whitespace-nowrap cursor-pointer text-amber-600 hover:bg-amber-100/60 border border-amber-200/50 hover:border-amber-300 ml-auto md:ml-4 flex items-center gap-1.5`}
+                className={`group px-3 py-2 rounded-xl text-xs sm:text-sm font-black transition-all duration-200 whitespace-nowrap cursor-pointer text-amber-600 hover:bg-amber-100/60 border border-amber-200/50 hover:border-amber-300 ml-auto md:ml-4 flex items-center gap-1.5 hover:scale-104 active:scale-96`}
               >
-                <ShieldCheck className="h-3.5 w-3.5 text-[#d97706]" />
+                <ShieldCheck className="h-3.5 w-3.5 text-[#d97706] transition-transform duration-300 ease-out group-hover:rotate-12 group-hover:scale-110" />
                 <span>Go to Admin</span>
               </button>
             )}

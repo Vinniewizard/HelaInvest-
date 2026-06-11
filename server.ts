@@ -1126,6 +1126,86 @@ async function triggerNowPaymentsDeposit(
 }
 
 // -------------------------------------------------------------
+// NOWPAYMENTS CRYPTO PAYOUT/WITHDRAWAL HELPER
+// -------------------------------------------------------------
+async function triggerNowPaymentsPayout(
+  amountKES: number,
+  cryptoCurrency: string,
+  payoutAddress: string,
+  txId: string,
+  db: DatabaseSchema
+): Promise<{
+  success: boolean;
+  payoutId?: string;
+  error?: string;
+}> {
+  const isSandbox = db.paymentSettings?.nowpayments_sandbox ?? false;
+  const apiKey = db.paymentSettings?.nowpayments_api_key || process.env.NOWPAYMENTS_API_KEY;
+
+  const amountUSD = Number((amountKES / 130).toFixed(2));
+  const normalizedCrypto = cryptoCurrency.toLowerCase();
+
+  console.log(`[NOWPayments Payout] Preparing payout. Amount KES: ${amountKES} (~$${amountUSD} USD). Crypto: ${cryptoCurrency}. Destination: ${payoutAddress}. Sandbox: ${isSandbox}`);
+
+  if (!isSandbox && !apiKey) {
+    return {
+      success: false,
+      error: "NOWPayments API Key is not configured by the administrator."
+    };
+  }
+
+  if (isSandbox) {
+    return {
+      success: true,
+      payoutId: "payout-mock-" + Math.floor(1000000 + Math.random() * 9000000).toString()
+    };
+  }
+
+  try {
+    const baseUrl = "https://api.nowpayments.io/v1";
+    
+    // Perform standard NOWPayments payout request
+    const response = await fetch(`${baseUrl}/payout`, {
+      method: "POST",
+      headers: {
+        "x-api-key": apiKey,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        withdrawals: [
+          {
+            address: payoutAddress,
+            amount: amountUSD,
+            currency: normalizedCrypto
+          }
+        ]
+      })
+    });
+
+    const data: any = await response.json();
+    console.log("[NOWPayments Payout API Response]:", data);
+
+    if (response.ok && (data.id || data.payout_id || data.success)) {
+      return {
+        success: true,
+        payoutId: data.id || data.payout_id || "payout-live-ok"
+      };
+    } else {
+      return {
+        success: false,
+        error: data.message || `NOWPayments Payout API error: HTTP ${response.status}`
+      };
+    }
+  } catch (err: any) {
+    console.error("[NOWPayments Payout Connection Exception]:", err);
+    return {
+      success: false,
+      error: err.message || "Failed to dispatch payload to NOWPayments Payout network."
+    };
+  }
+}
+
+// -------------------------------------------------------------
 // USER PAYMENT SETTINGS & CRYPTO DEPOSIT ROUTINGS
 // -------------------------------------------------------------
 
@@ -1498,9 +1578,9 @@ app.post("/api/admin/payment-settings", (req, res) => {
 
 // Submit a Withdrawal
 app.post("/api/transactions/withdraw", (req, res) => {
-  const { amount, phone, note } = req.body;
+  const { amount, phone, note, crypto_address, crypto_currency } = req.body;
   if (!amount || amount <= 0) return res.status(400).json({ error: "Please enter a valid withdrawal amount." });
-  if (!phone) return res.status(400).json({ error: "Please enter your phone number." });
+  if (!phone) return res.status(400).json({ error: "Please enter your destination details." });
 
   const db = getDatabase();
   const user = getAuthenticatedUser(req, db);
@@ -1518,8 +1598,10 @@ app.post("/api/transactions/withdraw", (req, res) => {
     transaction_type: "withdrawal",
     status: "pending",
     phone: phone,
-    note: note || "Withdrawal request to mobile money",
-    created_at: new Date().toISOString()
+    note: note || "Withdrawal request",
+    created_at: new Date().toISOString(),
+    crypto_address: crypto_address,
+    crypto_currency: crypto_currency
   };
 
   db.transactions.push(newTx);
@@ -1615,7 +1697,7 @@ app.get("/api/admin/transactions", (req, res) => {
 });
 
 // Approve Pending Transaction
-app.post("/api/admin/transactions/:id/approve", (req, res) => {
+app.post("/api/admin/transactions/:id/approve", async (req, res) => {
   const { id } = req.params;
   const db = getDatabase();
   const user = getAuthenticatedUser(req, db);
@@ -1628,6 +1710,16 @@ app.post("/api/admin/transactions/:id/approve", (req, res) => {
 
   if (tx.status !== "pending") {
     return res.status(400).json({ error: "Transaction is already processed." });
+  }
+
+  // If it's a cryptocurrency withdrawal, execute live payout on NOWPayments
+  if (tx.transaction_type === "withdrawal" && tx.crypto_address && tx.crypto_currency) {
+    const payoutResult = await triggerNowPaymentsPayout(tx.amount, tx.crypto_currency, tx.crypto_address, tx.id, db);
+    if (!payoutResult.success) {
+      return res.status(400).json({ error: `NOWPayments Payout Failed: ${payoutResult.error}` });
+    }
+    tx.payment_id = payoutResult.payoutId;
+    tx.note = (tx.note || "") + ` (NOWPayments Payout: ${payoutResult.payoutId})`;
   }
 
   tx.status = "approved";

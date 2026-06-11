@@ -153,23 +153,41 @@ export default function App() {
     checkSession();
   }, [checkSession]);
 
-  // 1. STATE -> URL: Update URL path when isAdminMode state shifts in response to UI actions
+  // Unified STATE <-> URL Synchronization to completely eliminate race conditions and keep Admin interface always accessible
   useEffect(() => {
     if (!currentUser) return;
     const path = window.location.pathname;
-    
-    if (isAdminMode && currentUser.isAdmin) {
-      if (!path.startsWith("/secure-admin")) {
-        window.history.pushState(null, "", "/secure-admin/");
+    const isCurrentlyOnAdminPath = path.startsWith("/secure-admin");
+
+    if (currentUser.isAdmin) {
+      if (isCurrentlyOnAdminPath) {
+        // Force admin mode state matching the URL
+        if (!isAdminMode) {
+          setIsAdminMode(true);
+        }
+        if (currentTab !== "admin") {
+          setCurrentTab("admin");
+        }
+      } else {
+        // They are on standard path, synchronize browser URL if state has changed
+        if (isAdminMode) {
+          window.history.pushState(null, "", "/secure-admin/");
+        }
       }
     } else {
-      if (path.startsWith("/secure-admin")) {
-        window.history.pushState(null, "", "/");
+      // Non-admin user tries to access admin path - redirect them!
+      if (isCurrentlyOnAdminPath) {
+        window.history.replaceState(null, "", "/");
+        setIsAdminMode(false);
+        if (currentTab === "admin") {
+          setCurrentTab("dashboard");
+        }
+        toast.error("Access Denied: You do not have administrator permissions.");
       }
     }
-  }, [isAdminMode, currentUser]);
+  }, [currentUser, isAdminMode, currentTab]);
 
-  // 2. URL -> STATE: Listen for browser history traversal events (Back / Forward)
+  // URL -> STATE: Listen for browser history traversal events (Back / Forward)
   useEffect(() => {
     if (!currentUser) return;
 
@@ -278,7 +296,7 @@ export default function App() {
     }
   };
 
-  const handleWithdrawal = async (amount: number, phone: string, note: string) => {
+  const handleWithdrawal = async (amount: number, phone: string, note: string, cryptoAddress?: string, cryptoCurrency?: string) => {
     if (!currentUser) return;
     try {
       const response = await fetch("/api/transactions/withdraw", {
@@ -287,7 +305,7 @@ export default function App() {
           "Content-Type": "application/json",
           "x-user-id": currentUser.id,
         },
-        body: JSON.stringify({ amount, phone, note }),
+        body: JSON.stringify({ amount, phone, note, crypto_address: cryptoAddress, crypto_currency: cryptoCurrency }),
       });
       const data = await response.json();
       return data;

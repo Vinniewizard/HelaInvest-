@@ -289,19 +289,15 @@ export default function CryptoDeposit({ onRefresh }: CryptoDepositProps) {
 
           <button
             type="submit"
-            disabled={loading || !amount}
-            className={`w-full py-3.5 px-6 rounded-xl flex justify-center items-center gap-2.5 font-bold text-xs transition-all duration-200 cursor-pointer shadow-md ${
-              !amount
-                ? "bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200/50"
-                : "bg-indigo-750 hover:bg-indigo-800 border border-indigo-200/20 text-white hover:shadow-lg active:scale-[0.99]"
-            }`}
+            disabled={loading}
+            className="w-full py-3.5 px-6 rounded-xl flex justify-center items-center gap-2.5 font-extrabold text-xs transition-all duration-200 cursor-pointer shadow-md bg-[#006B4A] hover:bg-[#005238] border border-emerald-500/10 text-white hover:shadow-lg active:scale-[0.99] disabled:opacity-50"
           >
             {loading ? (
               <span className="h-4.5 w-4.5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
             ) : (
               <>
                 <Coins className="h-4.5 w-4.5 text-amber-300 animate-pulse" />
-                Initialize Crypto Invoice Gateway
+                Deposit
               </>
             )}
           </button>

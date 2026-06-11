@@ -10,7 +10,7 @@ interface WalletProps {
   transactions: Transaction[];
   phone: string;
   onDeposit: (amount: number, phone: string, note: string) => Promise<any>;
-  onWithdraw: (amount: number, phone: string, note: string) => Promise<any>;
+  onWithdraw: (amount: number, phone: string, note: string, cryptoAddress?: string, cryptoCurrency?: string) => Promise<any>;
   onRefresh: () => void;
   activeSubTab?: "deposit" | "withdraw" | "history";
   setActiveSubTab?: (tab: "deposit" | "withdraw" | "history") => void;
@@ -188,7 +188,13 @@ export default function WalletComponent({
 
     setWithLoading(true);
     try {
-      const res = await onWithdraw(amtKES, targetDestination, targetNoteText);
+      const res = await onWithdraw(
+        amtKES,
+        targetDestination,
+        targetNoteText,
+        withdrawMethod === "crypto" ? withCryptoAddress : undefined,
+        withdrawMethod === "crypto" ? withCryptoCurrency : undefined
+      );
       if (res && res.error) {
         setFormMsg({ type: "error", text: res.error });
       } else {
@@ -535,7 +541,7 @@ export default function WalletComponent({
                     )}
                   </button>
                   <p className="text-[10px] text-slate-400 text-center leading-normal">
-                    The simulator mock prompt handles sandbox payments automatically. Visit Admin Hub to approve sandbox items as needed.
+                    This M-Pesa transaction is processed live. Standard carrier fees and regulations apply. Please keep your device unlocked to receive the prompt.
                   </p>
                 </form>
               ) : (

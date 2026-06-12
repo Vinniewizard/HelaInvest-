@@ -36,7 +36,9 @@ export default function WalletComponent({
   const [paymentSettings, setPaymentSettings] = useState({
     mpesa_enabled: true,
     crypto_enabled: true,
-    nowpayments_sandbox: false
+    nowpayments_sandbox: false,
+    min_deposit: undefined as number | undefined,
+    max_deposit: undefined as number | undefined
   });
 
   const [depositMethod, setDepositMethod] = useState<"mpesa" | "crypto">("mpesa");
@@ -107,9 +109,31 @@ export default function WalletComponent({
 
     const amtKES = convertToKES(typedAmt);
 
-    if (amtKES < 100) {
-      setFormMsg({ type: "error", text: `Minimum deposit is ${format(100)} (${activeCurrency === 'KES' ? '' : 'approx '}100 KSh).` });
-      return;
+    // Enforce dynamic administrative limits if set
+    if (paymentSettings.min_deposit !== undefined && paymentSettings.min_deposit !== null && paymentSettings.min_deposit > 0) {
+      if (amtKES < paymentSettings.min_deposit) {
+        setFormMsg({
+          type: "error",
+          text: `Selected deposit is below the administrative limit of ${format(paymentSettings.min_deposit)} (KSh ${paymentSettings.min_deposit.toLocaleString()}).`
+        });
+        return;
+      }
+    } else {
+      // Default fallback minimum
+      if (amtKES < 100) {
+        setFormMsg({ type: "error", text: `Minimum deposit is ${format(100)} (${activeCurrency === 'KES' ? '' : 'approx '}100 KSh).` });
+        return;
+      }
+    }
+
+    if (paymentSettings.max_deposit !== undefined && paymentSettings.max_deposit !== null && paymentSettings.max_deposit > 0) {
+      if (amtKES > paymentSettings.max_deposit) {
+        setFormMsg({
+          type: "error",
+          text: `Selected deposit exceeds the administrative maximum of ${format(paymentSettings.max_deposit)} (KSh ${paymentSettings.max_deposit.toLocaleString()}).`
+        });
+        return;
+      }
     }
 
     if (!depPhone) {
@@ -441,8 +465,22 @@ export default function WalletComponent({
                 <div className="border-t border-slate-100 pt-4 space-y-2.5">
                   <div className="flex justify-between items-center text-xs">
                     <span className="text-slate-400 font-semibold">Minimum Capital:</span>
-                    <span className="text-slate-800 font-bold">{format(100)} (~100 KSh)</span>
+                    <span className="text-[#006B4A] font-extrabold">
+                      {paymentSettings.min_deposit !== undefined && paymentSettings.min_deposit !== null && paymentSettings.min_deposit > 0 ? (
+                        `${format(paymentSettings.min_deposit)} (~${paymentSettings.min_deposit.toLocaleString()} KSh)`
+                      ) : (
+                        `${format(100)} (~100 KSh)`
+                      )}
+                    </span>
                   </div>
+                  {paymentSettings.max_deposit !== undefined && paymentSettings.max_deposit !== null && paymentSettings.max_deposit > 0 && (
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="text-slate-400 font-semibold">Maximum Cap:</span>
+                      <span className="text-rose-600 font-extrabold">
+                        {format(paymentSettings.max_deposit)} (~{paymentSettings.max_deposit.toLocaleString()} KSh)
+                      </span>
+                    </div>
+                  )}
                   <div className="flex justify-between items-center text-xs">
                     <span className="text-slate-400 font-semibold">Processing Fee:</span>
                     <span className="text-emerald-600 font-extrabold">0% FREE</span>
@@ -545,7 +583,11 @@ export default function WalletComponent({
                   </p>
                 </form>
               ) : (
-                <CryptoDeposit onRefresh={onRefresh} />
+                <CryptoDeposit 
+                  onRefresh={onRefresh} 
+                  minDeposit={paymentSettings.min_deposit}
+                  maxDeposit={paymentSettings.max_deposit}
+                />
               )}
             </div>
           </div>

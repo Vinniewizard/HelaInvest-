@@ -154,6 +154,8 @@ export default function AdminHub({ onRefresh }: AdminHubProps) {
     crypto_enabled: true,
     nowpayments_sandbox: true,
     nowpayments_api_key: "",
+    min_deposit: "" as string | number,
+    max_deposit: "" as string | number,
   });
   const [envDetected, setEnvDetected] = useState({
     nowpayments_api_key_set: false,
@@ -192,7 +194,11 @@ export default function AdminHub({ onRefresh }: AdminHubProps) {
       if (iData.investments) setInvestments(iData.investments);
       if (pData.plans) setPlans(pData.plans);
       if (payData.paymentSettings) {
-        setPaySettings(payData.paymentSettings);
+        setPaySettings({
+          ...payData.paymentSettings,
+          min_deposit: payData.paymentSettings.min_deposit ?? "",
+          max_deposit: payData.paymentSettings.max_deposit ?? "",
+        });
       }
       if (payData.envDetected) {
         setEnvDetected(payData.envDetected);
@@ -431,7 +437,11 @@ export default function AdminHub({ onRefresh }: AdminHubProps) {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
       if (data.paymentSettings) {
-        setPaySettings(data.paymentSettings);
+        setPaySettings({
+          ...data.paymentSettings,
+          min_deposit: data.paymentSettings.min_deposit ?? "",
+          max_deposit: data.paymentSettings.max_deposit ?? "",
+        });
       }
       if (data.envDetected) {
         setEnvDetected(data.envDetected);
@@ -1322,6 +1332,47 @@ export default function AdminHub({ onRefresh }: AdminHubProps) {
                 </div>
                 <div className="text-[9.5px] text-slate-500 leading-relaxed pt-1.5 border-t border-[#212a3d]/25">
                   💡 <strong className="text-slate-400">Where to set on Render:</strong> Live variables can be set under <span className="text-indigo-400 font-semibold font-mono">Render Dashboard &gt; Web Service &gt; Environment &gt; Environment Variables</span>. Adding them there ensures security and auto-sync!
+                </div>
+              </div>
+            </div>
+
+            {/* Dynamic Deposit Limits Configuration (KES) */}
+            <div className="bg-[#0c0f16]/90 border border-[#212a3d] p-5 rounded-xl space-y-4 md:col-span-2">
+              <span className="text-xs font-black text-red-400 uppercase tracking-widest block font-sans">
+                Dynamic Deposit Limit Controls (KES values)
+              </span>
+              <p className="text-[11px] leading-relaxed text-slate-400">
+                Configure your project's global minimum and maximum deposit limit thresholds. These restrictions are instantly enforced during checkout when clients attempt either Safaricom M-Pesa Express deposits or NOWPayments Cryptocurency invoice generations. 
+                <span className="text-red-300 block mt-1 font-semibold">Leave empty or set to 0 to disable automated limit validations on both Cashier interfaces.</span>
+              </p>
+              
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="block text-[10px] text-slate-400 uppercase font-bold tracking-wider">
+                    Global Minimum Deposit Limit (KES / KSh)
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    placeholder="e.g. 100 (Default is 100 KSh if empty)"
+                    value={paySettings.min_deposit ?? ""}
+                    onChange={(e) => setPaySettings({ ...paySettings, min_deposit: e.target.value })}
+                    className="w-full bg-[#0c0f16] border border-[#212a3d] focus:border-red-500/40 rounded-xl px-3.5 py-2 text-xs text-slate-200 font-mono outline-none"
+                  />
+                </div>
+                
+                <div className="space-y-1.5">
+                  <label className="block text-[10px] text-slate-400 uppercase font-bold tracking-wider">
+                    Global Maximum Deposit Limit (KES / KSh)
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    placeholder="e.g. 50000 (No upper limit check if empty)"
+                    value={paySettings.max_deposit ?? ""}
+                    onChange={(e) => setPaySettings({ ...paySettings, max_deposit: e.target.value })}
+                    className="w-full bg-[#0c0f16] border border-[#212a3d] focus:border-red-500/40 rounded-xl px-3.5 py-2 text-xs text-slate-200 font-mono outline-none"
+                  />
                 </div>
               </div>
             </div>

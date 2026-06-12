@@ -77,6 +77,8 @@ interface ServerPaymentSettings {
   crypto_enabled: boolean;
   nowpayments_sandbox: boolean;
   nowpayments_api_key?: string;
+  min_deposit?: number;
+  max_deposit?: number;
 }
 
 interface DatabaseSchema {
@@ -874,6 +876,25 @@ app.post("/api/transactions/deposit", async (req, res) => {
   const user = getAuthenticatedUser(req, db);
   if (!user) return res.status(401).json({ error: "Unauthorized" });
 
+  // Admin dynamic deposit limits check (in KES base unit)
+  const minDeposit = db.paymentSettings?.min_deposit;
+  const maxDeposit = db.paymentSettings?.max_deposit;
+  if (minDeposit !== undefined && minDeposit !== null && minDeposit > 0) {
+    if (Number(amount) < minDeposit) {
+      return res.status(400).json({ error: `Selected deposit amount is below the dynamic administrative minimum of KSh ${minDeposit.toLocaleString()}.` });
+    }
+  } else {
+    // Default fallback hard limit
+    if (Number(amount) < 100) {
+      return res.status(400).json({ error: "Minimum allowed deposit is KSh 100." });
+    }
+  }
+  if (maxDeposit !== undefined && maxDeposit !== null && maxDeposit > 0) {
+    if (Number(amount) > maxDeposit) {
+      return res.status(400).json({ error: `Selected deposit amount exceeds the dynamic administrative maximum of KSh ${maxDeposit.toLocaleString()}.` });
+    }
+  }
+
   // Admin Toggle Check
   const mpesaEnabled = db.paymentSettings?.mpesa_enabled ?? true;
   if (!mpesaEnabled) {
@@ -1250,7 +1271,9 @@ app.get("/api/payment-settings", (req, res) => {
     paymentSettings: {
       mpesa_enabled: db.paymentSettings?.mpesa_enabled ?? true,
       crypto_enabled: db.paymentSettings?.crypto_enabled ?? true,
-      nowpayments_sandbox: db.paymentSettings?.nowpayments_sandbox ?? false
+      nowpayments_sandbox: db.paymentSettings?.nowpayments_sandbox ?? false,
+      min_deposit: db.paymentSettings?.min_deposit,
+      max_deposit: db.paymentSettings?.max_deposit
     }
   });
 });
@@ -1268,6 +1291,25 @@ app.post("/api/transactions/deposit-crypto", async (req, res) => {
   const db = getDatabase();
   const user = getAuthenticatedUser(req, db);
   if (!user) return res.status(401).json({ error: "Unauthorized" });
+
+  // Admin dynamic deposit limits check (in KES base unit)
+  const minDeposit = db.paymentSettings?.min_deposit;
+  const maxDeposit = db.paymentSettings?.max_deposit;
+  if (minDeposit !== undefined && minDeposit !== null && minDeposit > 0) {
+    if (Number(amount) < minDeposit) {
+      return res.status(400).json({ error: `Selected deposit amount is below the dynamic administrative minimum of KSh ${minDeposit.toLocaleString()}.` });
+    }
+  } else {
+    // Default fallback hard limit
+    if (Number(amount) < 100) {
+      return res.status(400).json({ error: "Minimum allowed deposit is KSh 100." });
+    }
+  }
+  if (maxDeposit !== undefined && maxDeposit !== null && maxDeposit > 0) {
+    if (Number(amount) > maxDeposit) {
+      return res.status(400).json({ error: `Selected deposit amount exceeds the dynamic administrative maximum of KSh ${maxDeposit.toLocaleString()}.` });
+    }
+  }
 
   // Check admin settings
   const cryptoEnabled = db.paymentSettings?.crypto_enabled ?? true;
@@ -1605,13 +1647,15 @@ app.post("/api/admin/payment-settings", (req, res) => {
   if (!user || !user.isAdmin) {
     return res.status(403).json({ error: "Forbidden: Admin access only." });
   }
-  const { mpesa_enabled, crypto_enabled, nowpayments_sandbox, nowpayments_api_key } = req.body;
+  const { mpesa_enabled, crypto_enabled, nowpayments_sandbox, nowpayments_api_key, min_deposit, max_deposit } = req.body;
   
   db.paymentSettings = {
     mpesa_enabled: mpesa_enabled !== undefined ? !!mpesa_enabled : (db.paymentSettings?.mpesa_enabled ?? true),
     crypto_enabled: crypto_enabled !== undefined ? !!crypto_enabled : (db.paymentSettings?.crypto_enabled ?? true),
     nowpayments_sandbox: nowpayments_sandbox !== undefined ? !!nowpayments_sandbox : (db.paymentSettings?.nowpayments_sandbox ?? false),
-    nowpayments_api_key: nowpayments_api_key !== undefined ? nowpayments_api_key : (db.paymentSettings?.nowpayments_api_key || "")
+    nowpayments_api_key: nowpayments_api_key !== undefined ? nowpayments_api_key : (db.paymentSettings?.nowpayments_api_key || ""),
+    min_deposit: min_deposit !== undefined ? (min_deposit === "" || min_deposit === null || isNaN(Number(min_deposit)) ? undefined : Number(min_deposit)) : db.paymentSettings?.min_deposit,
+    max_deposit: max_deposit !== undefined ? (max_deposit === "" || max_deposit === null || isNaN(Number(max_deposit)) ? undefined : Number(max_deposit)) : db.paymentSettings?.max_deposit
   };
   
   saveDatabase(db);

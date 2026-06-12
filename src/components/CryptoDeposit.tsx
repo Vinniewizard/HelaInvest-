@@ -5,9 +5,11 @@ import { toast } from "sonner";
 
 interface CryptoDepositProps {
   onRefresh: () => void;
+  minDeposit?: number;
+  maxDeposit?: number;
 }
 
-export default function CryptoDeposit({ onRefresh }: CryptoDepositProps) {
+export default function CryptoDeposit({ onRefresh, minDeposit, maxDeposit }: CryptoDepositProps) {
   const { format, convertToKES, symbol, activeCurrency } = useCurrency();
   
   // Form State
@@ -69,9 +71,25 @@ export default function CryptoDeposit({ onRefresh }: CryptoDepositProps) {
 
     const amtKES = convertToKES(typedAmt);
 
-    if (amtKES < 100) {
-      setErrorMsg(`Minimum deposit is ${format(100)} (approx 100 KSh).`);
-      return;
+    // Enforce administrative dynamic thresholds if defined
+    if (minDeposit !== undefined && minDeposit !== null && minDeposit > 0) {
+      if (amtKES < minDeposit) {
+        setErrorMsg(`Deposit amount is below the administrative minimum of ${format(minDeposit)} (KSh ${minDeposit.toLocaleString()}).`);
+        return;
+      }
+    } else {
+      // Default fallback minimum
+      if (amtKES < 100) {
+        setErrorMsg(`Minimum deposit is ${format(100)} (approx 100 KSh).`);
+        return;
+      }
+    }
+
+    if (maxDeposit !== undefined && maxDeposit !== null && maxDeposit > 0) {
+      if (amtKES > maxDeposit) {
+        setErrorMsg(`Deposit amount is above the administrative maximum of ${format(maxDeposit)} (KSh ${maxDeposit.toLocaleString()}).`);
+        return;
+      }
     }
 
     setLoading(true);
@@ -244,6 +262,22 @@ export default function CryptoDeposit({ onRefresh }: CryptoDepositProps) {
                     <span>Converted Local Value:</span>
                     <span className="font-extrabold font-mono">≈ KSh {convertToKES(Number(amount)).toLocaleString()}</span>
                   </div>
+                )}
+                {minDeposit !== undefined && minDeposit !== null && minDeposit > 0 ? (
+                  <div className="text-[10.5px] text-slate-400 font-medium leading-normal mt-1.5">
+                    Allowed range: <span className="font-bold text-slate-700">{format(minDeposit)}</span> 
+                    {maxDeposit !== undefined && maxDeposit !== null && maxDeposit > 0 ? (
+                      <> to <span className="font-bold text-slate-700">{format(maxDeposit)}</span></>
+                    ) : (
+                      " Minimum"
+                    )}
+                  </div>
+                ) : (
+                  maxDeposit !== undefined && maxDeposit !== null && maxDeposit > 0 ? (
+                    <div className="text-[10.5px] text-slate-400 font-medium leading-normal mt-1.5">
+                      Maximum allowed limit: <span className="font-bold text-rose-600">{format(maxDeposit)}</span>
+                    </div>
+                  ) : null
                 )}
               </div>
 

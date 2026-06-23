@@ -6,6 +6,8 @@ export interface User {
   referralCode: string;
   referredBy?: string; // ID of the referrer
   isAdmin?: boolean;
+  password?: string;
+  balance?: number;
 }
 
 export interface Plan {

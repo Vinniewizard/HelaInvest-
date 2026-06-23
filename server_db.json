@@ -75,74 +75,8 @@
       "description": "Compounding apex tier designed for top HelaVest builders."
     }
   ],
-  "investments": [
-    {
-      "id": "inv-v-1",
-      "user_id": "seed-referrer-id",
-      "plan_id": "p2",
-      "amount": 2500,
-      "return_amount": 4000,
-      "profit": 1500,
-      "status": "completed",
-      "created_at": "2026-06-05T12:02:33.665Z",
-      "matures_at": "2026-06-10T12:02:33.665Z",
-      "planName": "Bronze (Growth)"
-    }
-  ],
-  "transactions": [
-    {
-      "id": "tx-init-admin",
-      "user_id": "admin-id",
-      "amount": 1000000,
-      "transaction_type": "deposit",
-      "status": "approved",
-      "phone": "0700000100",
-      "note": "System Initial Liquidity Reserves",
-      "created_at": "2026-05-12T12:02:33.665Z"
-    },
-    {
-      "id": "tx-init-vinnie",
-      "user_id": "seed-referrer-id",
-      "amount": 25000,
-      "transaction_type": "deposit",
-      "status": "approved",
-      "phone": "0722000111",
-      "note": "Initial Seed M-Pesa Wallet",
-      "created_at": "2026-05-27T12:02:33.665Z"
-    },
-    {
-      "id": "tx-inv-vinnie",
-      "user_id": "seed-referrer-id",
-      "amount": 2500,
-      "transaction_type": "investment",
-      "status": "approved",
-      "note": "Started Bronze (Growth)",
-      "created_at": "2026-06-05T12:02:33.665Z"
-    },
-    {
-      "id": "tx-payout-vinnie-seed",
-      "user_id": "seed-referrer-id",
-      "amount": 4000,
-      "transaction_type": "payout",
-      "status": "approved",
-      "note": "Payout for Bronze (Growth) #inv-v-1",
-      "created_at": "2026-06-10T12:02:33.665Z"
-    },
-    {
-      "id": "tx-crypto-atzx3s24q",
-      "user_id": "user-7n13l5ww5",
-      "amount": 6500,
-      "transaction_type": "deposit",
-      "status": "pending",
-      "phone": "Crypto (USDTTRC20)",
-      "note": "Crypto top up",
-      "created_at": "2026-06-11T12:18:07.371Z",
-      "crypto_address": "TXPrt123T77gV5bE888D16H91F7C1CabcD",
-      "crypto_amount": 50,
-      "crypto_currency": "USDTTRC20",
-      "payment_id": "nw-158888440"
-    }
-  ],
+  "investments": [],
+  "transactions": [],
   "referrals": [],
   "systemOffsetDays": 0,
   "paymentSettings": {

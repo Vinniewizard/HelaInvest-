@@ -79,6 +79,8 @@ interface ServerPaymentSettings {
   nowpayments_api_key?: string;
   min_deposit?: number;
   max_deposit?: number;
+  min_withdrawal?: number;
+  max_withdrawal?: number;
 }
 
 interface DatabaseSchema {
@@ -123,61 +125,9 @@ const DEFAULT_USERS: ServerUser[] = [
   }
 ];
 
-const DEFAULT_TRANSACTIONS: ServerTransaction[] = [
-  {
-    id: "tx-init-admin",
-    user_id: "admin-id",
-    amount: 1000000,
-    transaction_type: "deposit",
-    status: "approved",
-    phone: "0700000100",
-    note: "System Initial Liquidity Reserves",
-    created_at: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
-  },
-  {
-    id: "tx-init-vinnie",
-    user_id: "seed-referrer-id",
-    amount: 25000,
-    transaction_type: "deposit",
-    status: "approved",
-    phone: "0722000111",
-    note: "Initial Seed M-Pesa Wallet",
-    created_at: new Date(Date.now() - 15 * 24 * 60 * 60 * 1000).toISOString()
-  },
-  {
-    id: "tx-inv-vinnie",
-    user_id: "seed-referrer-id",
-    amount: 2500,
-    transaction_type: "investment",
-    status: "approved",
-    note: "Started Bronze (Growth)",
-    created_at: new Date(Date.now() - 6 * 24 * 60 * 60 * 1000).toISOString()
-  },
-  {
-    id: "tx-payout-vinnie-seed",
-    user_id: "seed-referrer-id",
-    amount: 4000,
-    transaction_type: "payout",
-    status: "approved",
-    note: "Payout for Bronze (Growth) #inv-v-1",
-    created_at: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString()
-  }
-];
+const DEFAULT_TRANSACTIONS: ServerTransaction[] = [];
 
-const DEFAULT_INVESTMENTS: ServerInvestment[] = [
-  {
-    id: "inv-v-1",
-    user_id: "seed-referrer-id",
-    plan_id: "p2",
-    amount: 2500,
-    return_amount: 4000,
-    profit: 1500,
-    status: "completed",
-    created_at: new Date(Date.now() - 6 * 24 * 60 * 60 * 1000).toISOString(),
-    matures_at: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
-    planName: "Bronze (Growth)"
-  }
-];
+const DEFAULT_INVESTMENTS: ServerInvestment[] = [];
 
 // NEON DATABASE BACKEND MODULE
 let neonPool: any = null;
@@ -1273,7 +1223,9 @@ app.get("/api/payment-settings", (req, res) => {
       crypto_enabled: db.paymentSettings?.crypto_enabled ?? true,
       nowpayments_sandbox: db.paymentSettings?.nowpayments_sandbox ?? false,
       min_deposit: db.paymentSettings?.min_deposit,
-      max_deposit: db.paymentSettings?.max_deposit
+      max_deposit: db.paymentSettings?.max_deposit,
+      min_withdrawal: db.paymentSettings?.min_withdrawal,
+      max_withdrawal: db.paymentSettings?.max_withdrawal
     }
   });
 });
@@ -1647,7 +1599,7 @@ app.post("/api/admin/payment-settings", (req, res) => {
   if (!user || !user.isAdmin) {
     return res.status(403).json({ error: "Forbidden: Admin access only." });
   }
-  const { mpesa_enabled, crypto_enabled, nowpayments_sandbox, nowpayments_api_key, min_deposit, max_deposit } = req.body;
+  const { mpesa_enabled, crypto_enabled, nowpayments_sandbox, nowpayments_api_key, min_deposit, max_deposit, min_withdrawal, max_withdrawal } = req.body;
   
   db.paymentSettings = {
     mpesa_enabled: mpesa_enabled !== undefined ? !!mpesa_enabled : (db.paymentSettings?.mpesa_enabled ?? true),
@@ -1655,7 +1607,9 @@ app.post("/api/admin/payment-settings", (req, res) => {
     nowpayments_sandbox: nowpayments_sandbox !== undefined ? !!nowpayments_sandbox : (db.paymentSettings?.nowpayments_sandbox ?? false),
     nowpayments_api_key: nowpayments_api_key !== undefined ? nowpayments_api_key : (db.paymentSettings?.nowpayments_api_key || ""),
     min_deposit: min_deposit !== undefined ? (min_deposit === "" || min_deposit === null || isNaN(Number(min_deposit)) ? undefined : Number(min_deposit)) : db.paymentSettings?.min_deposit,
-    max_deposit: max_deposit !== undefined ? (max_deposit === "" || max_deposit === null || isNaN(Number(max_deposit)) ? undefined : Number(max_deposit)) : db.paymentSettings?.max_deposit
+    max_deposit: max_deposit !== undefined ? (max_deposit === "" || max_deposit === null || isNaN(Number(max_deposit)) ? undefined : Number(max_deposit)) : db.paymentSettings?.max_deposit,
+    min_withdrawal: min_withdrawal !== undefined ? (min_withdrawal === "" || min_withdrawal === null || isNaN(Number(min_withdrawal)) ? undefined : Number(min_withdrawal)) : db.paymentSettings?.min_withdrawal,
+    max_withdrawal: max_withdrawal !== undefined ? (max_withdrawal === "" || max_withdrawal === null || isNaN(Number(max_withdrawal)) ? undefined : Number(max_withdrawal)) : db.paymentSettings?.max_withdrawal
   };
   
   saveDatabase(db);
@@ -1682,15 +1636,33 @@ app.post("/api/transactions/withdraw", (req, res) => {
   const user = getAuthenticatedUser(req, db);
   if (!user) return res.status(401).json({ error: "Unauthorized" });
 
+  const amtNum = Number(amount);
+
+  // Administrative dynamic limit controls
+  const minWithdrawal = db.paymentSettings?.min_withdrawal;
+  const maxWithdrawal = db.paymentSettings?.max_withdrawal;
+
+  if (minWithdrawal !== undefined && minWithdrawal !== null && minWithdrawal > 0) {
+    if (amtNum < minWithdrawal) {
+      return res.status(400).json({ error: `Withdrawal amount is below the administrative minimum of KSh ${minWithdrawal.toLocaleString()}.` });
+    }
+  }
+
+  if (maxWithdrawal !== undefined && maxWithdrawal !== null && maxWithdrawal > 0) {
+    if (amtNum > maxWithdrawal) {
+      return res.status(400).json({ error: `Withdrawal amount is above the administrative maximum of KSh ${maxWithdrawal.toLocaleString()}.` });
+    }
+  }
+
   const balanceData = calculateBalance(user.id, db.transactions);
-  if (amount > balanceData.available_balance) {
+  if (amtNum > balanceData.available_balance) {
     return res.status(400).json({ error: "Withdrawal amount exceeds your available balance." });
   }
 
   const newTx: ServerTransaction = {
     id: "tx-" + Math.random().toString(36).substr(2, 9),
     user_id: user.id,
-    amount: Number(amount),
+    amount: amtNum,
     transaction_type: "withdrawal",
     status: "pending",
     phone: phone,
@@ -1763,7 +1735,8 @@ app.post("/api/admin/reset", (req, res) => {
     investments: DEFAULT_INVESTMENTS,
     transactions: DEFAULT_TRANSACTIONS,
     referrals: [],
-    systemOffsetDays: 0
+    systemOffsetDays: 0,
+    paymentSettings: db.paymentSettings
   };
   saveDatabase(resetDb);
   res.json({ success: true, message: "Sandbox database restored to clean defaults." });
@@ -2030,10 +2003,125 @@ app.get("/api/admin/users", (req, res) => {
       referralCode: u.referralCode,
       referredBy: u.referredBy,
       isAdmin: u.isAdmin,
+      password: u.passwordHash,
       balance: bal_sum.available_balance
     };
   });
   res.json({ users: summary });
+});
+
+// Admin: Edit a user's details directly
+app.post("/api/admin/users/:id/edit", (req, res) => {
+  const { id } = req.params;
+  const { username, email, phone, password, isAdmin } = req.body;
+  const db = getDatabase();
+  const user = getAuthenticatedUser(req, db);
+  if (!user || !user.isAdmin) {
+    return res.status(403).json({ error: "Forbidden: Admin access only." });
+  }
+
+  const targetId = id;
+  const targetUserObj = db.users.find((u) => u.id === targetId);
+  if (!targetUserObj) {
+    return res.status(404).json({ error: "Target member not found." });
+  }
+
+  if (username && username !== targetUserObj.username) {
+    const exists = db.users.find((u) => u.username.toLowerCase() === username.toLowerCase() && u.id !== targetId);
+    if (exists) return res.status(400).json({ error: "A member with this username already exists." });
+    targetUserObj.username = username;
+  }
+
+  if (email && email !== targetUserObj.email) {
+    const exists = db.users.find((u) => u.email.toLowerCase() === email.toLowerCase() && u.id !== targetId);
+    if (exists) return res.status(400).json({ error: "A member with this email already exists." });
+    targetUserObj.email = email;
+  }
+
+  if (phone && phone !== targetUserObj.phone) {
+    const exists = db.users.find((u) => u.phone === phone && u.id !== targetId);
+    if (exists) return res.status(400).json({ error: "A member with this phone number already exists." });
+    targetUserObj.phone = phone;
+  }
+
+  if (password !== undefined && password !== "") {
+    targetUserObj.passwordHash = password;
+  }
+
+  if (isAdmin !== undefined) {
+    targetUserObj.isAdmin = !!isAdmin;
+  }
+
+  saveDatabase(db);
+  res.json({ success: true, message: "Member details updated successfully.", user: targetUserObj });
+});
+
+// Admin: Manipulate/Change or adjust user account balance directly
+app.post("/api/admin/users/:id/adjust-balance", (req, res) => {
+  const { id } = req.params;
+  const { targetBalance, adjustmentAmount, adjustmentType, adjustmentNote } = req.body;
+  const db = getDatabase();
+  const user = getAuthenticatedUser(req, db);
+  if (!user || !user.isAdmin) {
+    return res.status(403).json({ error: "Forbidden: Admin access only." });
+  }
+
+  const targetUserObj = db.users.find((u) => u.id === id);
+  if (!targetUserObj) {
+    return res.status(404).json({ error: "Target member not found in database." });
+  }
+
+  const currentBalRes = calculateBalance(id, db.transactions);
+  const currentBal = currentBalRes.available_balance;
+
+  if (targetBalance !== undefined && targetBalance !== null && targetBalance !== "") {
+    const targetVal = Number(targetBalance);
+    if (isNaN(targetVal)) {
+      return res.status(400).json({ error: "Please enter a valid numeric value for target balance." });
+    }
+    const diff = targetVal - currentBal;
+    if (diff === 0) {
+      return res.json({ success: true, message: "Target balance matches current balance, no correction record needed." });
+    }
+
+    const newTx: ServerTransaction = {
+      id: `tx-adj-${Date.now()}`,
+      user_id: id,
+      amount: Math.abs(diff),
+      transaction_type: diff > 0 ? "deposit" : "withdrawal",
+      status: "approved",
+      phone: targetUserObj.phone || "Admin Ledger Auto-Balance Adjustment",
+      note: adjustmentNote || `Administrative direct Balance override to match exactly ${targetVal} USD`,
+      created_at: new Date().toISOString()
+    };
+    db.transactions.push(newTx);
+  } else if (adjustmentAmount !== undefined && adjustmentAmount !== null && adjustmentAmount !== "") {
+    const adjAmt = Number(adjustmentAmount);
+    if (isNaN(adjAmt) || adjAmt <= 0) {
+      return res.status(400).json({ error: "Please enter a valid positive adjustment amount value." });
+    }
+    const mode = adjustmentType || "credit";
+    if (mode !== "credit" && mode !== "debit") {
+      return res.status(400).json({ error: "Adjustment type must be either 'credit' or 'debit'." });
+    }
+
+    const newTx: ServerTransaction = {
+      id: `tx-adj-${Date.now()}`,
+      user_id: id,
+      amount: adjAmt,
+      transaction_type: mode === "credit" ? "deposit" : "withdrawal",
+      status: "approved",
+      phone: targetUserObj.phone || "Admin Ledger Auto-Balance Adjustment",
+      note: adjustmentNote || `Administrative adjustment: ${mode === 'credit' ? 'Credited' : 'Debited'} ${adjAmt} USD`,
+      created_at: new Date().toISOString()
+    };
+    db.transactions.push(newTx);
+  } else {
+    return res.status(400).json({ error: "Please specify either a Target Balance override or an Adjustment Amount." });
+  }
+
+  saveDatabase(db);
+  res.json({ success: true, message: "Member wallet balance adjusted successfully." });
 });
 
 

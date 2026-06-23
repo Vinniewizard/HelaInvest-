@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { ShieldCheck, Users, Wallet, ListTodo, Plus, Check, X, ToggleLeft, ToggleRight, Sparkles, Server } from "lucide-react";
+import { ShieldCheck, Users, Wallet, ListTodo, Plus, Check, X, ToggleLeft, ToggleRight, Sparkles, Server, Edit, Eye, EyeOff, UserCog, ArrowUpDown, ChevronRight } from "lucide-react";
 import { Transaction, Investment, Plan } from "../types";
 
 interface AdminHubProps {
@@ -15,6 +15,7 @@ interface AdminUserSummary {
   referredBy?: string;
   isAdmin: boolean;
   balance: number;
+  password?: string;
 }
 
 export default function AdminHub({ onRefresh }: AdminHubProps) {
@@ -45,6 +46,113 @@ export default function AdminHub({ onRefresh }: AdminHubProps) {
   const [addPassword, setAddPassword] = useState("");
   const [addInitialBalance, setAddInitialBalance] = useState("");
   const [userFormLoading, setUserFormLoading] = useState(false);
+
+  // User Editing & Direct Balance Adjustment States
+  const [selectedManageUser, setSelectedManageUser] = useState<AdminUserSummary | null>(null);
+  const [editUsername, setEditUsername] = useState("");
+  const [editEmail, setEditEmail] = useState("");
+  const [editPhone, setEditPhone] = useState("");
+  const [editPassword, setEditPassword] = useState("");
+  const [editIsAdmin, setEditIsAdmin] = useState(false);
+  const [showEditPassword, setShowEditPassword] = useState(false);
+
+  const [adjTargetBalance, setAdjTargetBalance] = useState("");
+  const [adjAmount, setAdjAmount] = useState("");
+  const [adjType, setAdjType] = useState<"credit" | "debit">("credit");
+  const [adjNote, setAdjNote] = useState("");
+  const [isAdjLoading, setIsAdjLoading] = useState(false);
+
+  const startManagingUser = (user: AdminUserSummary) => {
+    setSelectedManageUser(user);
+    setEditUsername(user.username);
+    setEditEmail(user.email);
+    setEditPhone(user.phone);
+    setEditPassword(user.password || "");
+    setEditIsAdmin(user.isAdmin);
+    setShowEditPassword(false);
+    setAdjTargetBalance("");
+    setAdjAmount("");
+    setAdjType("credit");
+    setAdjNote("");
+    setMsg(null);
+  };
+
+  const handleEditDetailSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedManageUser) return;
+    setMsg(null);
+    setUserFormLoading(true);
+    try {
+      const response = await fetch(`/api/admin/users/${selectedManageUser.id}/edit`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-user-id": localStorage.getItem("hela_user_id") || "",
+        },
+        body: JSON.stringify({
+          username: editUsername,
+          email: editEmail,
+          phone: editPhone,
+          password: editPassword,
+          isAdmin: editIsAdmin,
+        }),
+      });
+
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error);
+
+      setMsg({ type: "success", text: `Successfully updated user details for "${editUsername}"!` });
+      await loadAdminState();
+      onRefresh();
+    } catch (err: any) {
+      setMsg({ type: "error", text: err.message || "Failed to update member details." });
+    } finally {
+      setUserFormLoading(false);
+    }
+  };
+
+  const handleAdjustBalanceSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedManageUser) return;
+    setMsg(null);
+    setIsAdjLoading(true);
+    try {
+      const bodyPayload: any = {
+        adjustmentNote: adjNote
+      };
+      if (adjTargetBalance !== "") {
+        bodyPayload.targetBalance = Number(adjTargetBalance);
+      } else if (adjAmount !== "") {
+        bodyPayload.adjustmentAmount = Number(adjAmount);
+        bodyPayload.adjustmentType = adjType;
+      } else {
+        throw new Error("Please specify either a target balance override or adjustment amount.");
+      }
+
+      const response = await fetch(`/api/admin/users/${selectedManageUser.id}/adjust-balance`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-user-id": localStorage.getItem("hela_user_id") || "",
+        },
+        body: JSON.stringify(bodyPayload),
+      });
+
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error);
+
+      setMsg({ type: "success", text: `Balance adjusted successfully for "${selectedManageUser.username}"!` });
+      setAdjTargetBalance("");
+      setAdjAmount("");
+      setAdjNote("");
+      await loadAdminState();
+      onRefresh();
+    } catch (err: any) {
+      setMsg({ type: "error", text: err.message || "Failed to adjust balance." });
+    } finally {
+      setIsAdjLoading(false);
+    }
+  };
 
   // Manual Ledger Injection States
   const [txUserId, setTxUserId] = useState("");
@@ -156,6 +264,8 @@ export default function AdminHub({ onRefresh }: AdminHubProps) {
     nowpayments_api_key: "",
     min_deposit: "" as string | number,
     max_deposit: "" as string | number,
+    min_withdrawal: "" as string | number,
+    max_withdrawal: "" as string | number,
   });
   const [envDetected, setEnvDetected] = useState({
     nowpayments_api_key_set: false,
@@ -189,6 +299,11 @@ export default function AdminHub({ onRefresh }: AdminHubProps) {
         if (uData.users.length > 0) {
           setTxUserId((prev) => prev || uData.users[0].id);
         }
+        setSelectedManageUser((prevSelected) => {
+          if (!prevSelected) return null;
+          const fresh = uData.users.find((u: any) => u.id === prevSelected.id);
+          return fresh || prevSelected;
+        });
       }
       if (tData.transactions) setTxs(tData.transactions);
       if (iData.investments) setInvestments(iData.investments);
@@ -198,6 +313,8 @@ export default function AdminHub({ onRefresh }: AdminHubProps) {
           ...payData.paymentSettings,
           min_deposit: payData.paymentSettings.min_deposit ?? "",
           max_deposit: payData.paymentSettings.max_deposit ?? "",
+          min_withdrawal: payData.paymentSettings.min_withdrawal ?? "",
+          max_withdrawal: payData.paymentSettings.max_withdrawal ?? "",
         });
       }
       if (payData.envDetected) {
@@ -441,6 +558,8 @@ export default function AdminHub({ onRefresh }: AdminHubProps) {
           ...data.paymentSettings,
           min_deposit: data.paymentSettings.min_deposit ?? "",
           max_deposit: data.paymentSettings.max_deposit ?? "",
+          min_withdrawal: data.paymentSettings.min_withdrawal ?? "",
+          max_withdrawal: data.paymentSettings.max_withdrawal ?? "",
         });
       }
       if (data.envDetected) {
@@ -803,97 +922,302 @@ export default function AdminHub({ onRefresh }: AdminHubProps) {
       {/* Registrations & Balances */}
       {activeAdminTab === "users" && (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-          {/* Enroll user form (left 5 columns) */}
-          <form onSubmit={handleAddUserSubmit} className="lg:col-span-5 bg-[#0f131d] border border-[#212a3d] rounded-2xl p-6 space-y-4 font-medium">
-            <div>
-              <h3 className="text-sm font-extrabold text-white uppercase tracking-tight flex items-center gap-1.5 bg-[#0f131d]">
-                <Plus className="h-4.5 w-4.5 text-red-500" />
-                Enroll New Member
-              </h3>
-              <p className="text-[10px] text-slate-450">
-                Enroll a new user account directly into our cloud database.
-              </p>
-            </div>
+          {/* Enroll user or Edit user form (left 5 columns) */}
+          {selectedManageUser ? (
+            <div className="lg:col-span-5 space-y-6">
+              {/* Form 1: Edit Details (Username, email, phone, password, isAdmin) */}
+              <form onSubmit={handleEditDetailSubmit} className="bg-[#0f131d] border border-[#212a3d] rounded-2xl p-6 space-y-4 font-medium relative">
+                <div className="flex justify-between items-center">
+                  <div>
+                    <h3 className="text-sm font-extrabold text-white uppercase tracking-tight flex items-center gap-1.5 bg-[#0f131d]">
+                      <UserCog className="h-4.5 w-4.5 text-red-500 animate-pulse" />
+                      Edit Member details
+                    </h3>
+                    <p className="text-[10px] text-slate-400">
+                      Modifying record details for: <span className="text-red-400 font-bold font-mono">{selectedManageUser.username}</span>
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedManageUser(null)}
+                    className="text-[10px] bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer uppercase tracking-wider"
+                  >
+                    Cancel
+                  </button>
+                </div>
 
-            <div className="space-y-1">
-              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Username *</label>
-              <input
-                type="text"
-                required
-                placeholder="e.g. JohnDoe"
-                value={addUsername}
-                onChange={(e) => setAddUsername(e.target.value)}
-                className="w-full bg-[#0c0f16] border border-[#212a3d] focus:border-red-500/40 rounded-xl px-4 py-2.5 text-xs text-slate-200 font-bold outline-none font-sans"
-              />
-            </div>
+                <div className="space-y-1">
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Username *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. JohnDoe"
+                    value={editUsername}
+                    onChange={(e) => setEditUsername(e.target.value)}
+                    className="w-full bg-[#0c0f16] border border-[#212a3d] focus:border-red-500/40 rounded-xl px-4 py-2.5 text-xs text-slate-200 font-bold outline-none font-sans"
+                  />
+                </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1">
-                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Email Address *</label>
-                <input
-                  type="email"
-                  required
-                  placeholder="john@example.com"
-                  value={addEmail}
-                  onChange={(e) => setAddEmail(e.target.value)}
-                  className="w-full bg-[#0c0f16] border border-[#212a3d] focus:border-red-500/40 rounded-xl px-4 py-2.5 text-xs text-slate-200 font-sans outline-none"
-                />
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Email Address *</label>
+                    <input
+                      type="email"
+                      required
+                      placeholder="john@example.com"
+                      value={editEmail}
+                      onChange={(e) => setEditEmail(e.target.value)}
+                      className="w-full bg-[#0c0f16] border border-[#212a3d] focus:border-red-500/40 rounded-xl px-4 py-2.5 text-xs text-slate-200 font-sans outline-none"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Phone Number *</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. 0712345678"
+                      value={editPhone}
+                      onChange={(e) => setEditPhone(e.target.value)}
+                      className="w-full bg-[#0c0f16] border border-[#212a3d] focus:border-red-500/40 rounded-xl px-4 py-2.5 text-xs text-slate-200 font-mono outline-none"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 gap-4">
+                  <div className="space-y-1">
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                      User Password (Plain-Text Display & Modification) *
+                    </label>
+                    <div className="relative">
+                      <input
+                        type={showEditPassword ? "text" : "password"}
+                        required
+                        placeholder="Configure strong password"
+                        value={editPassword}
+                        onChange={(e) => setEditPassword(e.target.value)}
+                        className="w-full bg-[#0c0f16] border border-[#212a3d] focus:border-red-500/40 rounded-xl px-4 pr-10 py-2.5 text-xs text-slate-200 font-sans outline-none"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowEditPassword(!showEditPassword)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 cursor-pointer"
+                        title={showEditPassword ? "Hide password" : "Show password"}
+                      >
+                        {showEditPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between bg-[#0c0f16] border border-[#212a3d] p-3 rounded-xl">
+                  <div className="space-y-0.5">
+                    <span className="block text-[11px] font-bold text-slate-300">Grant Administrator permissions</span>
+                    <span className="block text-[9px] text-slate-500">Allow full systems panel access roles.</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setEditIsAdmin(!editIsAdmin)}
+                    className="text-slate-400 hover:text-slate-200 transition-colors cursor-pointer"
+                  >
+                    {editIsAdmin ? (
+                      <ToggleRight className="h-8 w-8 text-red-500" />
+                    ) : (
+                      <ToggleLeft className="h-8 w-8 text-slate-600" />
+                    )}
+                  </button>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={userFormLoading}
+                  className="w-full py-2.5 bg-red-500 hover:bg-red-400 text-slate-950 font-bold text-xs rounded-xl flex items-center justify-center gap-2 transition-transform duration-200 cursor-pointer active:scale-[0.99] shadow-md disabled:opacity-50"
+                >
+                  <Check className="h-4 w-4" />
+                  {userFormLoading ? "Saving Changes..." : "Apply Member Details Update"}
+                </button>
+              </form>
+
+              {/* Form 2: Direct Balance adjustments */}
+              <form onSubmit={handleAdjustBalanceSubmit} className="bg-[#0f131d] border border-[#212a3d] rounded-2xl p-6 space-y-4 font-medium">
+                <div>
+                  <h3 className="text-sm font-extrabold text-white uppercase tracking-tight flex items-center gap-1.5 bg-[#0f131d]">
+                    <ArrowUpDown className="h-4.5 w-4.5 text-emerald-400" />
+                    Manipulate / Override Account Balance
+                  </h3>
+                  <div className="flex items-center justify-between bg-emerald-950/15 border border-emerald-500/20 px-3 py-2 rounded-xl mt-2">
+                    <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest">Enrolled Cash Balance:</span>
+                    <span className="text-xs font-black font-mono text-emerald-450">KSh {selectedManageUser.balance.toLocaleString()}</span>
+                  </div>
+                </div>
+
+                <div className="border-[#212a3d]/50 my-2 pt-2">
+                  <span className="block text-[10px] uppercase font-bold text-amber-550 mb-1 tracking-wider">Method A: Override to Exact Target</span>
+                  <div className="space-y-1">
+                    <label className="block text-[9px] font-bold text-slate-400 uppercase tracking-widest">New Target Balance (KSh)</label>
+                    <input
+                      type="number"
+                      placeholder="e.g. 100000 (Calculates positive/negative diff automatically!)"
+                      value={adjTargetBalance}
+                      onChange={(e) => {
+                        setAdjTargetBalance(e.target.value);
+                        setAdjAmount(""); // Clear other method
+                      }}
+                      className="w-full bg-[#0c0f16] border border-[#212a3d] focus:border-red-500/40 rounded-xl px-4 py-2 text-xs text-slate-200 font-mono outline-none"
+                    />
+                  </div>
+                </div>
+
+                <div className="border-t border-[#212a3d]/50 my-2 pt-2">
+                  <span className="block text-[10px] uppercase font-bold text-slate-450 mb-2 tracking-wider">Method B: Multi-directional adjustment</span>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                      <label className="block text-[9px] font-bold text-slate-400 uppercase tracking-widest">Amount (KSh)</label>
+                      <input
+                        type="number"
+                        placeholder="e.g. 500"
+                        value={adjAmount}
+                        onChange={(e) => {
+                          setAdjAmount(e.target.value);
+                          setAdjTargetBalance(""); // Clear other method
+                        }}
+                        className="w-full bg-[#0c0f16] border border-[#212a3d] focus:border-red-500/40 rounded-xl px-4 py-2 text-xs text-slate-200 font-mono outline-none"
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="block text-[9px] font-bold text-slate-400 uppercase tracking-widest">Change Direction</label>
+                      <select
+                        value={adjType}
+                        onChange={(e) => setAdjType(e.target.value as any)}
+                        className="w-full bg-[#0c0f16] border border-[#212a3d] focus:border-red-500/40 rounded-xl px-3 py-2 text-xs text-slate-200 font-bold outline-none cursor-pointer"
+                      >
+                        <option value="credit">Credit / Add to balance (+)</option>
+                        <option value="debit">Debit / Subtract from balance (-)</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="block text-[9px] font-bold text-slate-400 uppercase tracking-widest">Adjustment Memo Note</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Correction for safe deposit failure"
+                    value={adjNote}
+                    onChange={(e) => setAdjNote(e.target.value)}
+                    className="w-full bg-[#0c0f16] border border-[#212a3d] focus:border-red-500/40 rounded-xl px-4 py-2 text-xs text-slate-200 outline-none"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={isAdjLoading}
+                  className="w-full py-2.5 bg-[#006B4A] hover:bg-[#005a3e] text-white font-bold text-xs rounded-xl flex items-center justify-center gap-2 transition-transform duration-200 cursor-pointer active:scale-[0.99] shadow-md disabled:opacity-50"
+                >
+                  <ArrowUpDown className="h-4 w-4" />
+                  {isAdjLoading ? "Updating Balance Ledger..." : "Apply Financial Adjustment"}
+                </button>
+              </form>
+            </div>
+          ) : (
+            /* Enroll user form (left 5 columns) */
+            <form onSubmit={handleAddUserSubmit} className="lg:col-span-5 bg-[#0f131d] border border-[#212a3d] rounded-2xl p-6 space-y-4 font-medium">
+              <div>
+                <h3 className="text-sm font-extrabold text-white uppercase tracking-tight flex items-center gap-1.5 bg-[#0f131d]">
+                  <Plus className="h-4.5 w-4.5 text-red-500" />
+                  Enroll New Member
+                </h3>
+                <p className="text-[10px] text-slate-450">
+                  Enroll a new user account directly into our cloud database.
+                </p>
               </div>
 
               <div className="space-y-1">
-                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Phone Number *</label>
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Username *</label>
                 <input
                   type="text"
                   required
-                  placeholder="e.g. 0712345678"
-                  value={addPhone}
-                  onChange={(e) => setAddPhone(e.target.value)}
-                  className="w-full bg-[#0c0f16] border border-[#212a3d] focus:border-red-500/40 rounded-xl px-4 py-2.5 text-xs text-slate-200 font-mono outline-none"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1">
-                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Password *</label>
-                <input
-                  type="password"
-                  required
-                  placeholder="Set account password"
-                  value={addPassword}
-                  onChange={(e) => setAddPassword(e.target.value)}
-                  className="w-full bg-[#0c0f16] border border-[#212a3d] focus:border-red-500/40 rounded-xl px-4 py-2.5 text-xs text-slate-200 font-sans outline-none"
+                  placeholder="e.g. JohnDoe"
+                  value={addUsername}
+                  onChange={(e) => setAddUsername(e.target.value)}
+                  className="w-full bg-[#0c0f16] border border-[#212a3d] focus:border-red-500/40 rounded-xl px-4 py-2.5 text-xs text-slate-200 font-bold outline-none font-sans"
                 />
               </div>
 
-              <div className="space-y-1">
-                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Seed Balance (KSh)</label>
-                <input
-                  type="number"
-                  placeholder="Optional, e.g. 5000"
-                  value={addInitialBalance}
-                  onChange={(e) => setAddInitialBalance(e.target.value)}
-                  className="w-full bg-[#0c0f16] border border-[#212a3d] focus:border-red-500/40 rounded-xl px-4 py-2.5 text-xs text-slate-200 font-mono outline-none"
-                />
-              </div>
-            </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Email Address *</label>
+                  <input
+                    type="email"
+                    required
+                    placeholder="john@example.com"
+                    value={addEmail}
+                    onChange={(e) => setAddEmail(e.target.value)}
+                    className="w-full bg-[#0c0f16] border border-[#212a3d] focus:border-red-500/40 rounded-xl px-4 py-2.5 text-xs text-slate-200 font-sans outline-none"
+                  />
+                </div>
 
-            <button
-              type="submit"
-              disabled={userFormLoading}
-              className="w-full py-3 bg-red-500 hover:bg-red-400 text-slate-950 font-bold text-xs rounded-xl flex items-center justify-center gap-2 transition-transform duration-200 cursor-pointer active:scale-[0.99] shadow-md disabled:opacity-50"
-            >
-              <Plus className="h-4 w-4" />
-              {userFormLoading ? "Enrolling Member..." : "Enroll Active Member"}
-            </button>
-          </form>
+                <div className="space-y-1">
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Phone Number *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. 0712345678"
+                    value={addPhone}
+                    onChange={(e) => setAddPhone(e.target.value)}
+                    className="w-full bg-[#0c0f16] border border-[#212a3d] focus:border-red-500/40 rounded-xl px-4 py-2.5 text-xs text-slate-200 font-mono outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Password *</label>
+                  <input
+                    type="password"
+                    required
+                    placeholder="Set account password"
+                    value={addPassword}
+                    onChange={(e) => setAddPassword(e.target.value)}
+                    className="w-full bg-[#0c0f16] border border-[#212a3d] focus:border-red-500/40 rounded-xl px-4 py-2.5 text-xs text-slate-200 font-sans outline-none"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Seed Balance (KSh)</label>
+                  <input
+                    type="number"
+                    placeholder="Optional, e.g. 5000"
+                    value={addInitialBalance}
+                    onChange={(e) => setAddInitialBalance(e.target.value)}
+                    className="w-full bg-[#0c0f16] border border-[#212a3d] focus:border-red-500/40 rounded-xl px-4 py-2.5 text-xs text-slate-200 font-mono outline-none"
+                  />
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={userFormLoading}
+                className="w-full py-3 bg-red-500 hover:bg-red-400 text-slate-950 font-bold text-xs rounded-xl flex items-center justify-center gap-2 transition-transform duration-200 cursor-pointer active:scale-[0.99] shadow-md disabled:opacity-50"
+              >
+                <Plus className="h-4 w-4" />
+                {userFormLoading ? "Enrolling Member..." : "Enroll Active Member"}
+              </button>
+            </form>
+          )}
 
           {/* Table display (right 7 columns) */}
           <div className="lg:col-span-7 bg-[#0f131d] border border-[#212a3d] rounded-2xl overflow-hidden">
-            <div className="p-4 bg-[#0c0f16] border-b border-[#212a3d]/70">
+            <div className="p-4 bg-[#0c0f16] border-b border-[#212a3d]/70 flex items-center justify-between">
               <h3 className="text-xs font-extrabold text-slate-300 uppercase tracking-wider">
                 Enrolled Members database logs
               </h3>
+              {selectedManageUser && (
+                <span className="text-[10px] bg-red-500/15 text-red-400 border border-red-500/20 px-2 py-0.5 rounded font-bold font-mono">
+                  MANAGING: {selectedManageUser.username}
+                </span>
+              )}
             </div>
 
             <div className="overflow-x-auto text-xs">
@@ -905,28 +1229,47 @@ export default function AdminHub({ onRefresh }: AdminHubProps) {
                     <th className="p-4 font-semibold">Phone</th>
                     <th className="p-4 font-semibold">Referral Code</th>
                     <th className="p-4 font-semibold text-right">Wallet Balance</th>
+                    <th className="p-4 font-semibold text-center">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#212a3d]/50 text-slate-300 font-medium">
-                  {users.map((u) => (
-                    <tr key={u.id} className="hover:bg-[#121824]/30">
-                      <td className="p-4 font-bold text-slate-200">
-                        {u.username}{" "}
-                        {u.isAdmin && (
-                          <span className="bg-red-500/15 border border-red-500/20 text-red-400 text-[9px] px-1.5 py-0.2 rounded font-mono ml-1 font-bold">
-                            ADMIN
+                  {users.map((u) => {
+                    const isBeingManaged = selectedManageUser?.id === u.id;
+                    return (
+                      <tr key={u.id} className={`hover:bg-[#121824]/30 ${isBeingManaged ? "bg-red-500/5 font-bold" : ""}`}>
+                        <td className="p-4 font-bold text-slate-200 flex flex-col gap-0.5">
+                          <span className="flex items-center gap-1.5">
+                            {u.username}
+                            {u.isAdmin && (
+                              <span className="bg-red-500/15 border border-red-500/20 text-red-400 text-[9px] px-1.5 py-0.2 rounded font-mono font-bold">
+                                ADMIN
+                              </span>
+                            )}
                           </span>
-                        )}
-                      </td>
-                      <td className="p-4">{u.email}</td>
-                      <td className="p-4 font-mono">{u.phone}</td>
-                      <td className="p-4 font-mono font-bold text-slate-400">
-                        {u.referralCode}
-                        {u.referredBy && <span className="block text-[9px] text-slate-500 normale">Referred by ID: {u.referredBy}</span>}
-                      </td>
-                      <td className="p-4 text-right font-mono font-bold text-emerald-450">KSh {u.balance.toLocaleString()}</td>
-                    </tr>
-                  ))}
+                          <span className="text-[9px] text-slate-500 font-mono select-all">PWD: {u.password || "••••••••"}</span>
+                        </td>
+                        <td className="p-4">{u.email}</td>
+                        <td className="p-4 font-mono">{u.phone}</td>
+                        <td className="p-4 font-mono font-bold text-slate-400">
+                          {u.referralCode}
+                          {u.referredBy && <span className="block text-[9px] text-slate-500 normal">Referred by ID: {u.referredBy}</span>}
+                        </td>
+                        <td className="p-4 text-right font-mono font-bold text-emerald-450">KSh {u.balance.toLocaleString()}</td>
+                        <td className="p-4 text-center">
+                          <button
+                            onClick={() => startManagingUser(u)}
+                            className={`px-3 py-1 text-[10px] font-black rounded-lg uppercase tracking-wider transition-colors cursor-pointer ${
+                              isBeingManaged 
+                                ? "bg-red-500 text-slate-950 font-black animate-pulse" 
+                                : "bg-[#212a3d] hover:bg-slate-700 hover:text-white text-slate-305"
+                            }`}
+                          >
+                            Manage
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -1371,6 +1714,47 @@ export default function AdminHub({ onRefresh }: AdminHubProps) {
                     placeholder="e.g. 50000 (No upper limit check if empty)"
                     value={paySettings.max_deposit ?? ""}
                     onChange={(e) => setPaySettings({ ...paySettings, max_deposit: e.target.value })}
+                    className="w-full bg-[#0c0f16] border border-[#212a3d] focus:border-red-500/40 rounded-xl px-3.5 py-2 text-xs text-slate-200 font-mono outline-none"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Dynamic Withdrawal Limits Configuration (KES) */}
+            <div className="bg-[#0c0f16]/90 border border-[#212a3d] p-5 rounded-xl space-y-4 md:col-span-2">
+              <span className="text-xs font-black text-red-400 uppercase tracking-widest block font-sans">
+                Dynamic Withdrawal Limit Controls (KES values)
+              </span>
+              <p className="text-[11px] leading-relaxed text-slate-400">
+                Configure your project's global minimum and maximum withdrawal limit thresholds. These are fully enforced when any investor attempts to submit an M-Pesa or Cryptocurrency withdrawal transaction request.
+                <span className="text-red-300 block mt-1 font-semibold">Leave empty or set to 0 to disable automated withdrawal limits.</span>
+              </p>
+              
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="block text-[10px] text-slate-400 uppercase font-bold tracking-wider">
+                    Global Minimum Withdrawal Limit (KES / KSh)
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    placeholder="e.g. 50 (No dynamic minimum check if empty)"
+                    value={paySettings.min_withdrawal ?? ""}
+                    onChange={(e) => setPaySettings({ ...paySettings, min_withdrawal: e.target.value })}
+                    className="w-full bg-[#0c0f16] border border-[#212a3d] focus:border-red-500/40 rounded-xl px-3.5 py-2 text-xs text-slate-200 font-mono outline-none"
+                  />
+                </div>
+                
+                <div className="space-y-1.5">
+                  <label className="block text-[10px] text-slate-400 uppercase font-bold tracking-wider">
+                    Global Maximum Withdrawal Limit (KES / KSh)
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    placeholder="e.g. 100000 (No upper Limit check if empty)"
+                    value={paySettings.max_withdrawal ?? ""}
+                    onChange={(e) => setPaySettings({ ...paySettings, max_withdrawal: e.target.value })}
                     className="w-full bg-[#0c0f16] border border-[#212a3d] focus:border-red-500/40 rounded-xl px-3.5 py-2 text-xs text-slate-200 font-mono outline-none"
                   />
                 </div>

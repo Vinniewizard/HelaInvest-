@@ -59,6 +59,35 @@ export default function CryptoDeposit({ onRefresh, minDeposit, maxDeposit }: Cry
     fetchActiveSession();
   }, []);
 
+  // Auto-polling for active invoice/payment status synchronisation
+  useEffect(() => {
+    if (!activeInvoice) return;
+
+    const intervalId = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/transactions/${activeInvoice.txId}/check-crypto-status`, {
+          method: "POST",
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.status === "approved") {
+            toast.success(data.message || "Crypto payment verified and approved!");
+            setActiveInvoice(null);
+            onRefresh();
+          } else if (data.status === "declined") {
+            toast.error(data.message || "Payment has been marked as declined.");
+            setActiveInvoice(null);
+            onRefresh();
+          }
+        }
+      } catch (err) {
+        console.warn("Background billing polling sync issue:", err);
+      }
+    }, 12000); // Poll every 12 seconds
+
+    return () => clearInterval(intervalId);
+  }, [activeInvoice, onRefresh]);
+
   const handleCreateInvoice = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
